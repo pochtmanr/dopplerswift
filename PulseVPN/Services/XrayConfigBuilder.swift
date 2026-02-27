@@ -2,6 +2,13 @@ import Foundation
 
 enum XrayConfigBuilder {
 
+    // Countries present in stripped geoip.dat — geoip: rules crash if code is missing
+    // Must match scripts/strip-geoip.py KEEP_COUNTRIES
+    private static let supportedGeoIPCountries: Set<String> = [
+        "de", "gb", "fr", "nl", "ru", "us", "tr", "it", "es", "pl",
+        "ua", "kz", "ae", "il", "cn", "br", "jp", "kr", "in", "au", "ca"
+    ]
+
     // MARK: - Public API
 
     static func buildJSON(
@@ -23,8 +30,10 @@ enum XrayConfigBuilder {
         // Smart Routing: route domestic traffic via direct outbound
         if let country = smartRoutingCountry, !country.isEmpty {
             let code = country.lowercased()
+            let hasGeoIP = supportedGeoIPCountries.contains(code)
 
             // Route country TLD domains direct (e.g., .de, .fr, .ru)
+            // domain: prefix matches TLDs — works without geoip.dat
             if bypassTLDWebsites {
                 routingRules.append([
                     "type": "field",
@@ -34,8 +43,8 @@ enum XrayConfigBuilder {
             }
 
             // Route domestic IPs direct via geoip database
-            // Covers government/banking, streaming, and e-commerce traffic
-            if bypassDomesticIPs {
+            // Only add if country exists in stripped geoip.dat to avoid Xray crash
+            if bypassDomesticIPs && hasGeoIP {
                 routingRules.append([
                     "type": "field",
                     "ip": ["geoip:\(code)"],
@@ -69,7 +78,7 @@ enum XrayConfigBuilder {
         ])
 
         root["routing"] = [
-            "domainStrategy": "IPIfNonMatch",
+            "domainStrategy": "AsIs",
             "rules": routingRules
         ]
 

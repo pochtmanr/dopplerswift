@@ -2,20 +2,29 @@ import SwiftUI
 
 struct AppSettingsView: View {
     let vpnManager: VPNManager
+    @Bindable var languageManager: LanguageManager
 
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("connectOnLaunch") private var connectOnLaunch = false
     @AppStorage("killSwitch") private var killSwitch = false
 
     var body: some View {
         List {
-            Section("Connection") {
-                Toggle("Connect on Launch", isOn: $connectOnLaunch)
-                Toggle("Kill Switch", isOn: $killSwitch)
+            Section("General") {
+                NavigationLink {
+                    LanguagePickerView(selectedLanguage: $languageManager.selectedLanguage)
+                } label: {
+                    HStack {
+                        Text("Language")
+                        Spacer()
+                        Text(languageManager.selectedLanguage.displayName)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
-            Section("Notifications") {
-                Toggle("Push Notifications", isOn: $notificationsEnabled)
+            Section("Connection") {
+                Toggle("Connect on Launch", isOn: $connectOnLaunch)
+                Toggle("Always-on VPN", isOn: $killSwitch)
             }
 
             Section("Developer") {
@@ -46,6 +55,6 @@ struct AppSettingsView: View {
 
 #Preview {
     NavigationStack {
-        AppSettingsView(vpnManager: VPNManager())
+        AppSettingsView(vpnManager: VPNManager(), languageManager: LanguageManager.shared)
     }
 }

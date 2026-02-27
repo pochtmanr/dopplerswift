@@ -4,6 +4,7 @@ struct ContentView: View {
     let vpnManager: VPNManager
     let accountManager: AccountManager
     let rcService: RevenueCatService
+    let languageManager: LanguageManager
 
     @State private var servers: [ServerConfig] = []
     @State private var selectedServerID: UUID?
@@ -20,8 +21,6 @@ struct ContentView: View {
     // Bypass category toggles
     @State private var bypassTLDWebsites: Bool = ConfigStore.loadBypassTLDWebsites()
     @State private var bypassGovernmentBanking: Bool = ConfigStore.loadBypassGovernmentBanking()
-    @State private var bypassStreamingMedia: Bool = ConfigStore.loadBypassStreamingMedia()
-    @State private var bypassEcommerce: Bool = ConfigStore.loadBypassEcommerce()
 
     @State private var cloudServers: [SupabaseServer] = []
     @State private var isLoadingCloud = false
@@ -34,6 +33,11 @@ struct ContentView: View {
     #endif
 
     // MARK: - Computed Properties
+
+    /// Unified Pro check: RC first, Supabase fallback (handles web/Stripe subs)
+    private var isEffectivelyPro: Bool {
+        rcService.isEffectivelyPro(fallbackAccount: accountManager.account)
+    }
 
     private var selectedServer: ServerConfig? {
         servers.first { $0.id == selectedServerID }
@@ -80,7 +84,7 @@ struct ContentView: View {
             cloudServers: cloudServers,
             isLoadingCloud: isLoadingCloud,
             cloudError: cloudError,
-            isUserPro: rcService.isPro,
+            isUserPro: isEffectivelyPro,
             onRefreshCloud: { await loadCloudServers() },
             onSelectCloudServer: { selectCloudServer($0) }
         )
@@ -130,17 +134,15 @@ struct ContentView: View {
                     vpnStatus: vpnManager.status,
                     customDomains: $smartRoutingCustomDomains,
                     bypassTLDWebsites: $bypassTLDWebsites,
-                    bypassGovernmentBanking: $bypassGovernmentBanking,
-                    bypassStreamingMedia: $bypassStreamingMedia,
-                    bypassEcommerce: $bypassEcommerce
+                    bypassGovernmentBanking: $bypassGovernmentBanking
                 )
             }
 
             Tab("Profile", systemImage: "person.circle", value: .profile) {
-                ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager)
+                ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager, languageManager: languageManager)
             }
         }
-        .tint(Design.Colors.accent)
+        .tint(Design.Colors.teal)
         .sheet(isPresented: $showPaywall) {
             PaywallView(rcService: rcService, isPresented: $showPaywall)
                 .presentationDetents([.large])
@@ -148,6 +150,11 @@ struct ContentView: View {
                 .presentationBackground(.clear)
         }
         .onChange(of: smartRoutingEnabled) {
+            if smartRoutingEnabled && !isEffectivelyPro {
+                smartRoutingEnabled = false
+                showPaywall = true
+                return
+            }
             ConfigStore.saveSmartRoutingEnabled(smartRoutingEnabled)
             reconnectIfNeeded()
         }
@@ -165,14 +172,6 @@ struct ContentView: View {
         }
         .onChange(of: bypassGovernmentBanking) {
             ConfigStore.saveBypassGovernmentBanking(bypassGovernmentBanking)
-            reconnectIfNeeded()
-        }
-        .onChange(of: bypassStreamingMedia) {
-            ConfigStore.saveBypassStreamingMedia(bypassStreamingMedia)
-            reconnectIfNeeded()
-        }
-        .onChange(of: bypassEcommerce) {
-            ConfigStore.saveBypassEcommerce(bypassEcommerce)
             reconnectIfNeeded()
         }
     }
@@ -194,7 +193,7 @@ struct ContentView: View {
                         smartRoutingEnabled: $smartRoutingEnabled,
                         smartRoutingCountry: effectiveSmartRoutingCountry
                     )
-                    .navigationTitle("Pulse Route")
+                    .navigationTitle("Doppler VPN")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -203,7 +202,7 @@ struct ContentView: View {
                             } label: {
                                 Image(systemName: "plus")
                             }
-                            .tint(Design.Colors.accent)
+                            .tint(Design.Colors.teal)
                             .accessibilityLabel("Add Server")
                         }
                     }
@@ -212,12 +211,6 @@ struct ContentView: View {
                     }
                     .sheet(isPresented: $showAddServer) {
                         addServerSheet
-                    }
-                    .sheet(isPresented: $showPaywall) {
-                        PaywallView(rcService: rcService, isPresented: $showPaywall)
-                            .presentationDetents([.large])
-                            .presentationDragIndicator(.visible)
-                            .presentationBackground(.clear)
                     }
                 }
             }
@@ -231,9 +224,7 @@ struct ContentView: View {
                         vpnStatus: vpnManager.status,
                         customDomains: $smartRoutingCustomDomains,
                         bypassTLDWebsites: $bypassTLDWebsites,
-                        bypassGovernmentBanking: $bypassGovernmentBanking,
-                        bypassStreamingMedia: $bypassStreamingMedia,
-                        bypassEcommerce: $bypassEcommerce
+                        bypassGovernmentBanking: $bypassGovernmentBanking
                     )
                     .navigationTitle("Smart Route")
                     .navigationBarTitleDisplayMode(.large)
@@ -242,11 +233,17 @@ struct ContentView: View {
 
             Tab("Profile", systemImage: "person.circle", value: .profile) {
                 NavigationStack {
-                    ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager)
+                    ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager, languageManager: languageManager)
                 }
             }
         }
-        .tint(Design.Colors.accent)
+        .tint(Design.Colors.teal)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(rcService: rcService, isPresented: $showPaywall)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
+        }
         .onChange(of: servers) {
             ConfigStore.saveServers(servers)
         }
@@ -254,6 +251,11 @@ struct ContentView: View {
             ConfigStore.saveSelectedServerID(selectedServerID)
         }
         .onChange(of: smartRoutingEnabled) {
+            if smartRoutingEnabled && !isEffectivelyPro {
+                smartRoutingEnabled = false
+                showPaywall = true
+                return
+            }
             ConfigStore.saveSmartRoutingEnabled(smartRoutingEnabled)
             reconnectIfNeeded()
         }
@@ -271,14 +273,6 @@ struct ContentView: View {
         }
         .onChange(of: bypassGovernmentBanking) {
             ConfigStore.saveBypassGovernmentBanking(bypassGovernmentBanking)
-            reconnectIfNeeded()
-        }
-        .onChange(of: bypassStreamingMedia) {
-            ConfigStore.saveBypassStreamingMedia(bypassStreamingMedia)
-            reconnectIfNeeded()
-        }
-        .onChange(of: bypassEcommerce) {
-            ConfigStore.saveBypassEcommerce(bypassEcommerce)
             reconnectIfNeeded()
         }
         .onChange(of: showServerList) {
@@ -304,10 +298,10 @@ struct ContentView: View {
                 cloudServers: cloudServers,
                 isLoadingCloud: isLoadingCloud,
                 cloudError: cloudError,
-                isUserPro: rcService.isPro,
+                isUserPro: isEffectivelyPro,
                 onRefreshCloud: { await loadCloudServers() },
                 onSelectCloudServer: { server in
-                    if server.isPremium == true && !rcService.isPro {
+                    if server.isPremium == true && !isEffectivelyPro {
                         paywallPending = true
                         showServerList = false
                     } else {
@@ -391,14 +385,12 @@ struct ContentView: View {
               config.address, config.port, config.security, config.sni ?? "nil")
 
         // Any of the IP-based categories being on means we include geoip routing
-        let anyIPCategoryOn = bypassGovernmentBanking || bypassStreamingMedia || bypassEcommerce
-
         let xrayJSON = XrayConfigBuilder.buildJSON(
             from: config,
             smartRoutingCountry: effectiveSmartRoutingCountry,
             smartRoutingCustomDomains: smartRoutingEnabled ? smartRoutingCustomDomains : [],
             bypassTLDWebsites: bypassTLDWebsites,
-            bypassDomesticIPs: anyIPCategoryOn
+            bypassDomesticIPs: bypassGovernmentBanking
         )
         NSLog("[ContentView] Xray config length: %d", xrayJSON.count)
         try await vpnManager.connect(xrayJSON: xrayJSON)
@@ -407,9 +399,9 @@ struct ContentView: View {
     /// Reconnect with updated smart routing config if VPN is currently connected.
     private func reconnectIfNeeded() {
         guard vpnManager.status == .connected, let server = selectedServer else { return }
-        vpnManager.disconnect()
         Task {
-            try? await Task.sleep(for: .milliseconds(500))
+            // disconnect() now waits until status actually reaches .disconnected
+            await vpnManager.disconnect()
             try? await convertAndConnect(server.vlessConfig)
         }
     }
@@ -545,7 +537,7 @@ struct ContentView: View {
     }
 
     private func selectCloudServer(_ supabaseServer: SupabaseServer) {
-        if supabaseServer.isPremium == true && !rcService.isPro {
+        if supabaseServer.isPremium == true && !isEffectivelyPro {
             showPaywall = true
             return
         }
@@ -595,14 +587,14 @@ enum AppTab: String, CaseIterable {
 // MARK: - Previews
 
 #Preview("iPhone") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService())
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
 }
 
 #Preview("iPhone Dark") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService())
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
         .preferredColorScheme(.dark)
 }
 
 #Preview("iPad / macOS") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService())
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
 }

@@ -75,6 +75,21 @@ final class RevenueCatService {
     var isPro: Bool { currentTier >= .pro }
     var isPremium: Bool { currentTier >= .premium }
 
+    /// Returns the effective tier considering both RevenueCat and a Supabase account fallback.
+    /// Use this everywhere instead of raw `currentTier` to handle web/Stripe subscriptions.
+    func effectiveTier(fallbackAccount: Account?) -> SubscriptionTier {
+        let rcTier = currentTier
+        guard rcTier == .free, let account = fallbackAccount else { return rcTier }
+        if account.isPremium { return .premium }
+        if account.isPro { return .pro }
+        return .free
+    }
+
+    /// Convenience: whether user has Pro or higher considering Supabase fallback.
+    func isEffectivelyPro(fallbackAccount: Account?) -> Bool {
+        effectiveTier(fallbackAccount: fallbackAccount) >= .pro
+    }
+
     var subscriptionStatus: String {
         guard isPro else { return "Free" }
         if isInGracePeriod { return "Grace Period" }
@@ -119,6 +134,7 @@ final class RevenueCatService {
     /// Call after user authentication.
     func logIn(accountId: String) async {
         guard isConfigured else { return }
+        guard Purchases.shared.appUserID != accountId else { return }
         do {
             let (info, _) = try await Purchases.shared.logIn(accountId)
             self.customerInfo = info

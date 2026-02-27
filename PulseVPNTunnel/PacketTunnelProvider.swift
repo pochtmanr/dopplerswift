@@ -1,7 +1,15 @@
 import NetworkExtension
 import LibXray
+import Network
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
+
+    /// Monitors network path changes to detect connectivity loss
+    private var pathMonitor: NWPathMonitor?
+    private let monitorQueue = DispatchQueue(label: "com.simnetiq.vpnreact.tunnel.pathmonitor")
+
+    /// Xray startup timeout in seconds (Apple kills extensions after ~60s)
+    private static let xrayStartTimeout: TimeInterval = 15
 
     override func startTunnel(
         options: [String: NSObject]?,
@@ -69,8 +77,11 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 // 5. Start Xray
                 let datDir = sharedDir.path
-                // Disable mph cache — Xray requires the cache file to already exist,
-                // and errors out on first run. Empty string = no caching.
+                // mph cache disabled — our routing uses domain: (TLD matching)
+                // and geoip: rules, neither of which need geosite mph cache.
+                // Remove stale cache file if present to prevent EOF errors.
+                let staleCache = cacheDir.appendingPathComponent("geosite.mph")
+                try? FileManager.default.removeItem(at: staleCache)
                 let mphCachePath = ""
 
                 TunnelLogger.log("datDir: \(datDir)")
@@ -128,8 +139,34 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
                 TunnelLogger.log("Xray request created, calling RunXrayFromJSON...")
 
-                // Run Xray
-                let responseBase64 = LibXrayRunXrayFromJSON(request)
+                // Run Xray with timeout watchdog — if LibXray blocks for too long,
+                // Apple will kill the extension anyway (~60s). We fail fast at 15s
+                // so the user sees a clear error instead of a silent timeout.
+                let xrayResult: String? = await withCheckedContinuation { continuation in
+                    let completed = LockedFlag()
+
+                    // Timeout watchdog
+                    DispatchQueue.global().asyncAfter(deadline: .now() + Self.xrayStartTimeout) {
+                        if completed.setIfFirst() {
+                            TunnelLogger.log("FAIL: Xray startup timed out after \(Self.xrayStartTimeout)s")
+                            continuation.resume(returning: nil)
+                        }
+                    }
+
+                    // Actual Xray startup (may block)
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let result = LibXrayRunXrayFromJSON(request)
+                        if completed.setIfFirst() {
+                            continuation.resume(returning: result)
+                        }
+                    }
+                }
+
+                guard let responseBase64 = xrayResult else {
+                    completionHandler(TunnelError.xrayStartFailed("Startup timed out after \(Int(Self.xrayStartTimeout))s"))
+                    return
+                }
+
                 TunnelLogger.log("RunXrayFromJSON returned (\(responseBase64.count) chars)")
 
                 guard let response = decodeCallResponse(responseBase64) else {
@@ -146,6 +183,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
 
                 TunnelLogger.log("=== CONNECTED SUCCESSFULLY ===")
+                self.startNetworkMonitor()
                 completionHandler(nil)
             } catch {
                 TunnelLogger.log("FAIL exception: \(error.localizedDescription)")
@@ -159,10 +197,55 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         completionHandler: @escaping () -> Void
     ) {
         TunnelLogger.log("=== STOP (reason: \(reason.rawValue)) ===")
+
+        // Stop network path monitor
+        stopNetworkMonitor()
+
+        // Stop Xray core
         if let response = decodeCallResponse(LibXrayStopXray()), !response.success {
             TunnelLogger.log("stopXray error: \(response.error ?? "unknown")")
         }
+
+        TunnelLogger.log("Cleanup complete")
         completionHandler()
+    }
+
+    // MARK: - Network Monitoring
+
+    /// Monitors device network path and updates tunnel status on connectivity changes.
+    /// When the device loses network, we signal reasserting so the UI reflects the state.
+    /// When network returns, we re-apply settings to resume proxy traffic.
+    private func startNetworkMonitor() {
+        stopNetworkMonitor()
+
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+
+            switch path.status {
+            case .satisfied:
+                TunnelLogger.log("Network path: satisfied")
+                // Network restored — reassert tunnel settings so proxy resumes
+                self.reasserting = false
+            case .unsatisfied:
+                TunnelLogger.log("Network path: unsatisfied (no connectivity)")
+                // Signal to the system that the tunnel is temporarily unavailable
+                self.reasserting = true
+            case .requiresConnection:
+                TunnelLogger.log("Network path: requiresConnection")
+                self.reasserting = true
+            @unknown default:
+                TunnelLogger.log("Network path: unknown status")
+            }
+        }
+        monitor.start(queue: monitorQueue)
+        pathMonitor = monitor
+        TunnelLogger.log("Network path monitor started")
+    }
+
+    private func stopNetworkMonitor() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
     }
 
     // MARK: - Network Settings
@@ -329,7 +412,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - Directories
 
     private func getSharedDirectory() -> URL {
-        let groupId = "group.com.pulsingroutes.vpn"
+        let groupId = "group.com.simnetiq.vpnreact"
         return FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: groupId)
             ?? FileManager.default.temporaryDirectory
@@ -399,5 +482,21 @@ extension PacketTunnelProvider {
                 return "Xray failed to start: \(reason)"
             }
         }
+    }
+}
+
+// MARK: - Thread-safe one-shot flag for timeout mechanism
+
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fired = false
+
+    /// Returns `true` if this is the first call. All subsequent calls return `false`.
+    func setIfFirst() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if fired { return false }
+        fired = true
+        return true
     }
 }

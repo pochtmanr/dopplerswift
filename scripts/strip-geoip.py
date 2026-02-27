@@ -6,7 +6,10 @@ import sys
 from google.protobuf.internal.decoder import _DecodeVarint
 from google.protobuf.internal.encoder import _EncodeVarint
 
-KEEP_COUNTRIES = {"DE", "RU", "US", "GB", "FR", "NL", "TR", "UA", "KZ", "AE", "IL", "CN"}
+KEEP_COUNTRIES = {
+    "DE", "GB", "FR", "NL", "RU", "US", "TR", "IT", "ES", "PL",
+    "UA", "KZ", "AE", "IL", "CN", "BR", "JP", "KR", "IN", "AU", "CA",
+}
 
 
 def read_varint(data, pos):

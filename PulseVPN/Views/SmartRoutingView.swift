@@ -15,8 +15,6 @@ struct SmartRoutingView: View {
     // Bypass category toggles
     @Binding var bypassTLDWebsites: Bool
     @Binding var bypassGovernmentBanking: Bool
-    @Binding var bypassStreamingMedia: Bool
-    @Binding var bypassEcommerce: Bool
 
     @State private var showAddDomain = false
     @State private var newDomainText = ""
@@ -33,7 +31,8 @@ struct SmartRoutingView: View {
 
     // MARK: - Country Data
 
-    private static let countries: [(code: String, name: String, flag: String)] = [
+    // Must match countries in stripped geoip.dat (scripts/strip-geoip.py)
+    private static let countries: [(code: String, name: LocalizedStringResource, flag: String)] = [
         ("DE", "Germany", "\u{1F1E9}\u{1F1EA}"),
         ("GB", "United Kingdom", "\u{1F1EC}\u{1F1E7}"),
         ("FR", "France", "\u{1F1EB}\u{1F1F7}"),
@@ -46,6 +45,9 @@ struct SmartRoutingView: View {
         ("PL", "Poland", "\u{1F1F5}\u{1F1F1}"),
         ("UA", "Ukraine", "\u{1F1FA}\u{1F1E6}"),
         ("KZ", "Kazakhstan", "\u{1F1F0}\u{1F1FF}"),
+        ("AE", "UAE", "\u{1F1E6}\u{1F1EA}"),
+        ("IL", "Israel", "\u{1F1EE}\u{1F1F1}"),
+        ("CN", "China", "\u{1F1E8}\u{1F1F3}"),
         ("BR", "Brazil", "\u{1F1E7}\u{1F1F7}"),
         ("JP", "Japan", "\u{1F1EF}\u{1F1F5}"),
         ("KR", "South Korea", "\u{1F1F0}\u{1F1F7}"),
@@ -61,7 +63,8 @@ struct SmartRoutingView: View {
     }
 
     private static func countryName(for code: String) -> String {
-        countries.first(where: { $0.code == code })?.name ?? code
+        guard let resource = countries.first(where: { $0.code == code })?.name else { return code }
+        return String(localized: resource)
     }
 
     // MARK: - Computed State
@@ -89,17 +92,18 @@ struct SmartRoutingView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Design.Spacing.lg) {
-                warningBanner
-                smartRoutingCard
-                bypassRulesSection
-                customDomainsSection
-                footer
+            GlassEffectContainer {
+                VStack(spacing: Design.Spacing.lg) {
+                    warningBanner
+                    smartRoutingCard
+                    bypassRulesSection
+                    customDomainsSection
+                    footer
+                }
+                .padding(.horizontal, Design.Spacing.md)
+                .padding(.vertical, Design.Spacing.lg)
             }
-            .padding(.horizontal, Design.Spacing.md)
-            .padding(.vertical, Design.Spacing.lg)
         }
-        .background(Design.Colors.surfaceBackground)
         .onAppear { fetchMissingFavicons() }
         .onChange(of: customDomains) { _, _ in fetchMissingFavicons() }
         .alert("Add Custom Domain", isPresented: $showAddDomain) {
@@ -115,7 +119,7 @@ struct SmartRoutingView: View {
                 newDomainText = ""
             }
         } message: {
-            Text("Enter a domain to bypass VPN routing.")
+            Text("Enter a domain to route directly.")
         }
     }
 
@@ -149,9 +153,9 @@ struct SmartRoutingView: View {
             // Left: animated icon
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 32, weight: .medium))
-                .foregroundStyle(isActive ? Design.Colors.connected : Design.Colors.textTertiary)
+                .foregroundStyle(isActive ? Design.Colors.teal : Design.Colors.textTertiary)
                 .shadow(
-                    color: isActive ? Design.Colors.connected.opacity(0.4) : .clear,
+                    color: isActive ? Design.Colors.teal.opacity(0.4) : .clear,
                     radius: isActive ? 10 : 0
                 )
                 .modifier(SmartRoutingPulseModifier(isActive: isActive))
@@ -172,20 +176,15 @@ struct SmartRoutingView: View {
             // Right: toggle
             Toggle("", isOn: $isEnabled)
                 .labelsHidden()
-                .tint(Design.Colors.connected)
+                .tint(Design.Colors.teal)
                 #if os(iOS)
                 .sensoryFeedback(.selection, trigger: isEnabled)
                 #endif
         }
         .padding(Design.Spacing.md)
-        .background(Design.Colors.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                .strokeBorder(
-                    isActive ? Design.Colors.connected.opacity(0.3) : Design.Colors.textTertiary.opacity(0.2),
-                    lineWidth: isActive ? 1 : 0.5
-                )
+        .glassEffect(
+            isActive ? .regular.tint(Design.Colors.teal.opacity(0.15)) : .regular,
+            in: .rect(cornerRadius: Design.CornerRadius.lg)
         )
         .animation(Design.Animation.springDefault, value: isActive)
         .accessibilityElement(children: .combine)
@@ -201,7 +200,7 @@ struct SmartRoutingView: View {
                     }
                 } label: {
                     Label {
-                        Text("\(country.flag) \(country.name)")
+                        Text("\(country.flag) \(String(localized: country.name))")
                     } icon: {
                         if selectedCountryCode == country.code {
                             Image(systemName: "checkmark")
@@ -221,7 +220,7 @@ struct SmartRoutingView: View {
                 if isAutoDetected {
                     Text("(auto)")
                         .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                 }
 
                 Image(systemName: "chevron.up.chevron.down")
@@ -229,41 +228,37 @@ struct SmartRoutingView: View {
                     .foregroundStyle(Design.Colors.textTertiary)
             }
         }
-        .accessibilityLabel("Bypass country: \(Self.countryName(for: selectedCountryCode))")
-        .accessibilityHint("Double tap to change the bypass country")
+        .accessibilityLabel("Smart Route country: \(Self.countryName(for: selectedCountryCode))")
+        .accessibilityHint("Double tap to change the Smart Route country")
     }
 
     // MARK: - Bypass Rules Section (with toggles)
 
     private var bypassRulesSection: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.sm) {
-            Text("BYPASS RULES")
+            Text("DIRECT ROUTING RULES")
                 .font(.system(.caption, design: .rounded, weight: .semibold))
                 .foregroundStyle(Design.Colors.textTertiary)
                 .padding(.leading, Design.Spacing.xs)
 
-            VStack(spacing: Design.Spacing.xs) {
+            VStack(spacing: 0) {
                 bypassToggleRow(
                     icon: "globe",
-                    text: "\(activeTLD) websites",
+                    text: String(localized: "\(activeTLD) websites"),
                     isOn: $bypassTLDWebsites
                 )
+                Divider().padding(.leading, 40)
                 bypassToggleRow(
                     icon: "building.columns.fill",
                     text: "Government & banking",
                     isOn: $bypassGovernmentBanking
                 )
-                bypassToggleRow(
-                    icon: "play.tv.fill",
-                    text: "Local streaming & media",
-                    isOn: $bypassStreamingMedia
-                )
-                bypassToggleRow(
-                    icon: "cart.fill",
-                    text: "Domestic e-commerce",
-                    isOn: $bypassEcommerce
-                )
             }
+            .padding(.horizontal, Design.Spacing.md)
+            .padding(.vertical, Design.Spacing.xs)
+            .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
+            .opacity(togglesDisabled ? 0.5 : 1.0)
+            .animation(Design.Animation.springDefault, value: isActive)
         }
     }
 
@@ -271,7 +266,7 @@ struct SmartRoutingView: View {
         HStack(spacing: Design.Spacing.md) {
             Image(systemName: icon)
                 .font(.body)
-                .foregroundStyle(isActive && isOn.wrappedValue ? Design.Colors.accent : Design.Colors.textTertiary)
+                .foregroundStyle(isActive && isOn.wrappedValue ? Design.Colors.teal : Design.Colors.textTertiary)
                 .frame(width: 24)
 
             Text(text)
@@ -282,14 +277,10 @@ struct SmartRoutingView: View {
 
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .tint(Design.Colors.connected)
+                .tint(Design.Colors.teal)
                 .disabled(togglesDisabled)
         }
-        .padding(Design.Spacing.md)
-        .background(Design.Colors.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
-        .opacity(togglesDisabled ? 0.5 : 1.0)
-        .animation(Design.Animation.springDefault, value: isActive)
+        .padding(.vertical, 14)
         .animation(Design.Animation.springDefault, value: isOn.wrappedValue)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(text): \(isOn.wrappedValue ? "Enabled" : "Disabled")")
@@ -304,11 +295,16 @@ struct SmartRoutingView: View {
                 .foregroundStyle(Design.Colors.textTertiary)
                 .padding(.leading, Design.Spacing.xs)
 
-            if customDomains.isEmpty {
-                emptyDomainsPlaceholder
-            } else {
-                domainsList
+            VStack(spacing: 0) {
+                if customDomains.isEmpty {
+                    emptyDomainsPlaceholder
+                } else {
+                    domainsList
+                }
             }
+            .padding(.horizontal, Design.Spacing.md)
+            .padding(.vertical, Design.Spacing.xs)
+            .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
 
             addDomainButton
             learnMoreLink
@@ -327,7 +323,7 @@ struct SmartRoutingView: View {
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(Design.Colors.textSecondary)
 
-                Text("Add domains you want to always bypass VPN")
+                Text("Add domains you want to always route directly")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Design.Colors.textTertiary)
                     .multilineTextAlignment(.center)
@@ -335,18 +331,14 @@ struct SmartRoutingView: View {
             Spacer()
         }
         .padding(.vertical, Design.Spacing.lg)
-        .padding(.horizontal, Design.Spacing.md)
-        .background(Design.Colors.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                .strokeBorder(Design.Colors.textTertiary.opacity(0.1), lineWidth: 0.5)
-        )
     }
 
     private var domainsList: some View {
-        VStack(spacing: Design.Spacing.xs) {
+        VStack(spacing: 0) {
             ForEach(Array(customDomains.enumerated()), id: \.offset) { index, domain in
+                if index > 0 {
+                    Divider().padding(.leading, 40)
+                }
                 domainRow(domain: domain, index: index)
             }
         }
@@ -376,12 +368,9 @@ struct SmartRoutingView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove \(domain)")
-            .accessibilityHint("Double tap to remove this domain from bypass list")
+            .accessibilityHint("Double tap to remove this domain from direct routing list")
         }
-        .padding(.horizontal, Design.Spacing.md)
         .padding(.vertical, Design.Spacing.sm)
-        .background(Design.Colors.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
         .transition(.asymmetric(
             insertion: .move(edge: .top).combined(with: .opacity),
             removal: .move(edge: .trailing).combined(with: .opacity)
@@ -400,19 +389,19 @@ struct SmartRoutingView: View {
                     Text("Add Domain")
                         .font(.system(.subheadline, design: .rounded, weight: .medium))
                 }
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Design.Spacing.md)
-                .background(Design.Colors.accent.opacity(0.1))
+                .background(Design.Colors.teal.opacity(0.1))
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .strokeBorder(Design.Colors.accent.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(Design.Colors.teal.opacity(0.3), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Add custom domain")
-            .accessibilityHint("Double tap to add a domain to the bypass list")
+            .accessibilityHint("Double tap to add a domain to the direct routing list")
 
             #if os(iOS)
             Button {
@@ -460,10 +449,10 @@ struct SmartRoutingView: View {
                 Text("Learn how Smart Route works")
                     .font(.system(.caption, design: .rounded))
 
-                Image(systemName: "arrow.right")
+                Image(systemName: "chevron.forward")
                     .font(.system(size: 10, weight: .semibold))
             }
-            .foregroundStyle(Design.Colors.accent)
+            .foregroundStyle(Design.Colors.teal)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -473,7 +462,7 @@ struct SmartRoutingView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        Text("Powered by Xray geosite/geoip routing")
+        Text("Powered by advanced geo-based routing")
             .font(.system(.caption2, design: .rounded))
             .foregroundStyle(Design.Colors.textTertiary)
             .frame(maxWidth: .infinity)
@@ -502,7 +491,7 @@ struct SmartRoutingView: View {
             } else {
                 Image(systemName: "globe")
                     .font(.body)
-                    .foregroundStyle(isActive ? Design.Colors.accent : Design.Colors.textTertiary)
+                    .foregroundStyle(isActive ? Design.Colors.teal : Design.Colors.textTertiary)
             }
         } else {
             ProgressView()
@@ -563,19 +552,19 @@ struct SmartRoutingView: View {
     #if os(iOS)
     private func pasteFromClipboard() {
         guard let raw = UIPasteboard.general.string else {
-            showPasteError("Nothing to paste")
+            showPasteError(String(localized: "Nothing to paste"))
             return
         }
 
         let domain = extractDomain(from: raw)
 
         guard !domain.isEmpty, isValidDomain(domain) else {
-            showPasteError("No valid domain found")
+            showPasteError(String(localized: "No valid domain found"))
             return
         }
 
         guard !customDomains.contains(domain) else {
-            showPasteError("Domain already added")
+            showPasteError(String(localized: "Domain already added"))
             return
         }
 
@@ -690,9 +679,7 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             vpnStatus: .connected,
             customDomains: .constant(["sparkasse.de", "commerzbank.de"]),
             bypassTLDWebsites: .constant(true),
-            bypassGovernmentBanking: .constant(true),
-            bypassStreamingMedia: .constant(true),
-            bypassEcommerce: .constant(true)
+            bypassGovernmentBanking: .constant(true)
         )
     }
 }
@@ -706,9 +693,7 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             vpnStatus: .disconnected,
             customDomains: .constant(["mybank.de"]),
             bypassTLDWebsites: .constant(true),
-            bypassGovernmentBanking: .constant(true),
-            bypassStreamingMedia: .constant(false),
-            bypassEcommerce: .constant(true)
+            bypassGovernmentBanking: .constant(true)
         )
     }
 }
@@ -722,9 +707,7 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             vpnStatus: .disconnected,
             customDomains: .constant([]),
             bypassTLDWebsites: .constant(true),
-            bypassGovernmentBanking: .constant(true),
-            bypassStreamingMedia: .constant(true),
-            bypassEcommerce: .constant(true)
+            bypassGovernmentBanking: .constant(true)
         )
     }
 }
