@@ -185,7 +185,7 @@ struct ProfileView: View {
         } message: {
             Text(deleteError ?? "An error occurred.")
         }
-        .navigationTitle("Pulse Route")
+        .navigationTitle("Profile")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif

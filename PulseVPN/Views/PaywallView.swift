@@ -15,35 +15,16 @@ struct PaywallView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            // Gradient background
-            LinearGradient(
-                colors: [Color.black, Color(red: 0.05, green: 0.1, blue: 0.2)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-
+        VStack(spacing: 0) {
+            // Scrollable content
             ScrollView {
                 VStack(spacing: Design.Spacing.lg) {
-                    // Close button
-                    HStack {
-                        Spacer()
-                        Button { isPresented = false } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // Header
+                    // Logo + title
                     VStack(spacing: Design.Spacing.sm) {
                         Image("AppLogo")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 64, height: 64)
-                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
                             .background(
                                 LinearGradient(
                                     colors: [Design.Colors.accent, Design.Colors.accentDark],
@@ -52,24 +33,19 @@ struct PaywallView: View {
                                 )
                             )
                             .clipShape(.rect(cornerRadius: 14, style: .continuous))
-                            .shadow(color: Design.Colors.accent.opacity(0.4), radius: 12, y: 4)
+                            .shadow(color: Design.Colors.accent.opacity(0.3), radius: 8, y: 4)
 
-                        Text("Doppler VPN Pro")
-                            .font(.system(.title, design: .rounded, weight: .bold))
+                        Text("Pulse Route Pro")
+                            .font(.system(.title2, design: .rounded, weight: .bold))
                             .foregroundStyle(.white)
+
+                        Text("Unlock all features")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
                     }
-                    .padding(.top, Design.Spacing.lg)
+                    .padding(.top, Design.Spacing.xl)
 
-                    // Hero image
-                    Image("SubscriptionHero")
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 170)
-                        .frame(maxWidth: .infinity)
-                        .clipShape(.rect(cornerRadius: Design.CornerRadius.lg))
-                        .padding(.horizontal)
-
-                    // Feature list
+                    // Feature list (Apple-required vertical format)
                     featureList
 
                     // Trial banner
@@ -99,23 +75,50 @@ struct PaywallView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
-
-                    // Continue button
-                    continueButton
-
-                    // Legal row
-                    legalRow
-
-                    // Disclosure
-                    Text(disclosureText)
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.3))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Design.Spacing.lg)
-                        .padding(.bottom, Design.Spacing.xl)
                 }
+                .padding(.horizontal)
             }
+            .scrollBounceBehavior(.basedOnSize)
+
+            // Fixed bottom: CTA + legal + disclosure
+            VStack(spacing: Design.Spacing.sm) {
+                continueButton
+
+                legalRow
+
+                Text(disclosureText)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Design.Spacing.lg)
+            }
+            .padding(.horizontal)
+            .padding(.top, Design.Spacing.md)
+            .padding(.bottom, Design.Spacing.lg)
         }
+        .background {
+            GeometryReader { geo in
+                Image("SubscriptionHero")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0.0),
+                                .init(color: .black.opacity(0.4), location: 0.25),
+                                .init(color: .black.opacity(0.8), location: 0.5),
+                                .init(color: .black, location: 0.7)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+            }
+            .ignoresSafeArea()
+        }
+        .preferredColorScheme(.dark)
         .task {
             if rcService.packages.isEmpty {
                 await rcService.fetchOfferings()
@@ -131,26 +134,31 @@ struct PaywallView: View {
     @ViewBuilder
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            paywallFeatureRow("Premium Servers")
-            paywallFeatureRow("Ad Blocking")
-            paywallFeatureRow("Multiple Devices")
-            paywallFeatureRow("Content Filter")
-            paywallFeatureRow("Priority Support")
+            featureRow("shield.fill", "Premium Servers", "Access fast, low-latency servers worldwide")
+            featureRow("arrow.triangle.branch", "Smart Route", "Direct routing for domestic websites")
+            featureRow("map.fill", "Lite Trace", "Map view with server route tracking")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Design.Spacing.xl)
     }
 
     @ViewBuilder
-    private func paywallFeatureRow(_ title: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
+    private func featureRow(_ icon: String, _ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Design.Colors.accent)
-                .font(.system(size: 18))
+                .frame(width: 28, height: 28)
 
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text(subtitle)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
         }
     }
 
@@ -192,33 +200,13 @@ struct PaywallView: View {
 
     @ViewBuilder
     private var continueButton: some View {
-        Button {
+        PrimaryCTAButton(
+            title: rcService.continueButtonTitle,
+            isLoading: isPurchasing,
+            isDisabled: selectedPackage == nil
+        ) {
             Task { await purchaseSelected() }
-        } label: {
-            Group {
-                if isPurchasing {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Text(rcService.continueButtonTitle)
-                        .font(.system(.body, design: .rounded, weight: .bold))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(
-                LinearGradient(
-                    colors: [Design.Colors.accent, Design.Colors.accentDark],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                in: .rect(cornerRadius: Design.CornerRadius.lg)
-            )
-            .foregroundStyle(.white)
         }
-        .disabled(selectedPackage == nil || isPurchasing)
-        .padding(.horizontal)
-        .buttonStyle(PaywallScaleButtonStyle())
     }
 
     // MARK: - Legal Row
@@ -226,16 +214,24 @@ struct PaywallView: View {
     @ViewBuilder
     private var legalRow: some View {
         HStack(spacing: Design.Spacing.md) {
-            Button("Restore") {
+            Button {
                 Task { await restorePurchases() }
+            } label: {
+                if isRestoring {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.white.opacity(0.45))
+                } else {
+                    Text("Restore")
+                }
             }
             .disabled(isRestoring)
 
-            Divider().frame(height: 14)
+            Rectangle().fill(.white.opacity(0.3)).frame(width: 1, height: 14)
 
             Link("Terms", destination: URL(string: "https://dopplervpn.com/terms")!)
 
-            Divider().frame(height: 14)
+            Rectangle().fill(.white.opacity(0.3)).frame(width: 1, height: 14)
 
             Link("Privacy", destination: URL(string: "https://dopplervpn.com/privacy")!)
         }
@@ -292,16 +288,5 @@ struct PaywallView: View {
             text += " Free trial will convert to a paid subscription unless canceled before the trial period ends."
         }
         return text
-    }
-}
-
-// MARK: - Scale Button Style
-
-private struct PaywallScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: configuration.isPressed)
     }
 }

@@ -51,7 +51,11 @@ struct PackageCard: View {
             .padding(Design.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                    .fill(isSelected ? Design.Colors.accent.opacity(0.08) : Design.Colors.surfaceCard)
+                    .fill(isSelected ? Design.Colors.accent.opacity(0.08) : .clear)
+            )
+            .background(
+                .ultraThinMaterial,
+                in: RoundedRectangle(cornerRadius: Design.CornerRadius.md)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Design.CornerRadius.md)

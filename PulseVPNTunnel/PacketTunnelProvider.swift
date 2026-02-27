@@ -69,14 +69,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 // 5. Start Xray
                 let datDir = sharedDir.path
-                // Enable mph cache — Xray caches domain matcher after first build,
-                // speeding up subsequent startups.
-                let mphCachePath = cacheDir.path
+                // Disable mph cache — Xray requires the cache file to already exist,
+                // and errors out on first run. Empty string = no caching.
+                let mphCachePath = ""
 
                 TunnelLogger.log("datDir: \(datDir)")
+                TunnelLogger.log("mphCachePath: \(mphCachePath)")
+
+                let fm = FileManager.default
 
                 // Check if geoip/geosite files exist in datDir
-                let fm = FileManager.default
                 let geoipPath = sharedDir.appendingPathComponent("geoip.dat").path
                 let geositePath = sharedDir.appendingPathComponent("geosite.dat").path
                 TunnelLogger.log("geoip.dat exists at datDir: \(fm.fileExists(atPath: geoipPath))")

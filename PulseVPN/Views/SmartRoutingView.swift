@@ -7,6 +7,12 @@ struct SmartRoutingView: View {
     let vpnStatus: ConnectionStatus
     @Binding var customDomains: [String]
 
+    // Bypass category toggles
+    @Binding var bypassTLDWebsites: Bool
+    @Binding var bypassGovernmentBanking: Bool
+    @Binding var bypassStreamingMedia: Bool
+    @Binding var bypassEcommerce: Bool
+
     @State private var showAddDomain = false
     @State private var newDomainText = ""
 
@@ -60,22 +66,8 @@ struct SmartRoutingView: View {
         ".\(selectedCountryCode.lowercased())"
     }
 
-    // MARK: - Bypass Rules
-
-    private struct BypassRule: Identifiable {
-        let id = UUID()
-        let icon: String
-        let text: String
-    }
-
-    private var bypassRules: [BypassRule] {
-        let tld = activeTLD
-        return [
-            BypassRule(icon: "globe", text: "\(tld) websites"),
-            BypassRule(icon: "building.columns.fill", text: "Government & banking services"),
-            BypassRule(icon: "play.tv.fill", text: "Local streaming & media"),
-            BypassRule(icon: "cart.fill", text: "Domestic e-commerce"),
-        ]
+    private var togglesDisabled: Bool {
+        !isEnabled || vpnStatus != .connected
     }
 
     // MARK: - Body
@@ -83,10 +75,8 @@ struct SmartRoutingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Design.Spacing.lg) {
-                heroIcon
-                toggleCard
-                statusBanner
-                countrySelectorCard
+                warningBanner
+                smartRoutingCard
                 bypassRulesSection
                 customDomainsSection
                 footer
@@ -112,39 +102,57 @@ struct SmartRoutingView: View {
         }
     }
 
-    // MARK: - Hero Icon
+    // MARK: - Warning Banner (top, only when enabled but VPN disconnected)
 
-    private var heroIcon: some View {
-        Image(systemName: "arrow.triangle.branch")
-            .font(.system(size: 60))
-            .foregroundStyle(isActive ? Design.Colors.connected : Design.Colors.textTertiary)
-            .shadow(
-                color: isActive ? Design.Colors.connected.opacity(0.4) : .clear,
-                radius: isActive ? 16 : 0
-            )
-            .scaleEffect(isActive ? 1.0 : 0.9)
-            .modifier(SmartRoutingPulseModifier(isActive: isActive))
-            .animation(Design.Animation.springDefault, value: isActive)
-            .padding(.top, Design.Spacing.md)
-            .accessibilityLabel(isActive ? "Smart routing active" : "Smart routing inactive")
+    @ViewBuilder
+    private var warningBanner: some View {
+        if isEnabled && vpnStatus != .connected {
+            HStack(spacing: Design.Spacing.sm) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+
+                Text("Requires VPN Connection")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+            }
+            .foregroundStyle(.orange)
+            .padding(.horizontal, Design.Spacing.md)
+            .padding(.vertical, Design.Spacing.sm)
+            .frame(maxWidth: .infinity)
+            .background(.orange.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .animation(Design.Animation.springDefault, value: vpnStatus)
+        }
     }
 
-    // MARK: - Toggle Card
+    // MARK: - Unified Smart Routing Card
 
-    private var toggleCard: some View {
+    private var smartRoutingCard: some View {
         HStack(spacing: Design.Spacing.md) {
+            // Left: animated icon
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 32, weight: .medium))
+                .foregroundStyle(isActive ? Design.Colors.connected : Design.Colors.textTertiary)
+                .shadow(
+                    color: isActive ? Design.Colors.connected.opacity(0.4) : .clear,
+                    radius: isActive ? 10 : 0
+                )
+                .modifier(SmartRoutingPulseModifier(isActive: isActive))
+                .animation(Design.Animation.springDefault, value: isActive)
+                .frame(width: 44)
+
+            // Middle: title + country picker
             VStack(alignment: .leading, spacing: Design.Spacing.xs) {
                 Text("Smart Routing")
                     .font(.system(.headline, design: .rounded, weight: .semibold))
                     .foregroundStyle(Design.Colors.textPrimary)
 
-                Text("Bypass VPN for domestic sites")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Design.Colors.textSecondary)
+                countryPickerButton
             }
 
             Spacer()
 
+            // Right: toggle
             Toggle("", isOn: $isEnabled)
                 .labelsHidden()
                 .tint(Design.Colors.connected)
@@ -157,153 +165,58 @@ struct SmartRoutingView: View {
         .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                .strokeBorder(Design.Colors.textTertiary.opacity(0.2), lineWidth: 0.5)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Smart Routing toggle, currently \(isEnabled ? "enabled" : "disabled")")
-        .accessibilityHint("Double tap to \(isEnabled ? "disable" : "enable") smart routing")
-    }
-
-    // MARK: - Status Banner
-
-    private var statusBanner: some View {
-        HStack(spacing: Design.Spacing.sm) {
-            Image(systemName: statusIcon)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .contentTransition(.symbolEffect(.replace))
-
-            Text(statusText)
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-        }
-        .foregroundStyle(statusForeground)
-        .padding(.horizontal, Design.Spacing.md)
-        .padding(.vertical, Design.Spacing.sm)
-        .background(statusBackground.opacity(0.15))
-        .clipShape(Capsule())
-        .animation(Design.Animation.springDefault, value: isActive)
-        .animation(Design.Animation.springDefault, value: isEnabled)
-        .accessibilityLabel(statusAccessibilityLabel)
-    }
-
-    private var statusIcon: String {
-        if isActive {
-            return "checkmark.circle.fill"
-        } else if isEnabled {
-            return "exclamationmark.triangle.fill"
-        } else {
-            return "minus.circle.fill"
-        }
-    }
-
-    private var statusText: String {
-        if isActive {
-            let code = selectedCountryCode
-            return "Active \u{2014} Bypassing \(code) traffic"
-        } else if isEnabled {
-            return "Requires VPN Connection"
-        } else {
-            return "Disabled"
-        }
-    }
-
-    private var statusBackground: Color {
-        if isActive {
-            return Design.Colors.connected
-        } else if isEnabled {
-            return .orange
-        } else {
-            return Design.Colors.textTertiary
-        }
-    }
-
-    private var statusForeground: Color {
-        if isActive {
-            return Design.Colors.connected
-        } else if isEnabled {
-            return .orange
-        } else {
-            return Design.Colors.textSecondary
-        }
-    }
-
-    private var statusAccessibilityLabel: String {
-        if isActive {
-            return "Smart routing is active, bypassing \(Self.countryName(for: selectedCountryCode)) traffic"
-        } else if isEnabled {
-            return "Smart routing is enabled but requires a VPN connection"
-        } else {
-            return "Smart routing is disabled"
-        }
-    }
-
-    // MARK: - Country Selector Card
-
-    private var countrySelectorCard: some View {
-        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
-            Text("Bypass Country")
-                .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                .foregroundStyle(Design.Colors.textPrimary)
-
-            Menu {
-                ForEach(Self.countries, id: \.code) { country in
-                    Button {
-                        withAnimation(Design.Animation.springQuick) {
-                            selectedCountryCode = country.code
-                        }
-                    } label: {
-                        Label {
-                            Text("\(country.flag) \(country.name)")
-                        } icon: {
-                            if selectedCountryCode == country.code {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: Design.Spacing.sm) {
-                    Text(Self.flagEmoji(for: selectedCountryCode))
-                        .font(.system(size: 28))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Self.countryName(for: selectedCountryCode))
-                            .font(.system(.body, design: .rounded, weight: .medium))
-                            .foregroundStyle(Design.Colors.textPrimary)
-
-                        if isAutoDetected {
-                            Text("(auto-detected)")
-                                .font(.system(.caption2, design: .rounded))
-                                .foregroundStyle(Design.Colors.accent)
-                        }
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(.caption, weight: .semibold))
-                        .foregroundStyle(Design.Colors.textTertiary)
-                }
-                .padding(Design.Spacing.md)
-                .background(Design.Colors.surfaceCard)
-                .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                        .strokeBorder(Design.Colors.textTertiary.opacity(0.2), lineWidth: 0.5)
+                .strokeBorder(
+                    isActive ? Design.Colors.connected.opacity(0.3) : Design.Colors.textTertiary.opacity(0.2),
+                    lineWidth: isActive ? 1 : 0.5
                 )
-            }
-            .accessibilityLabel("Bypass country: \(Self.countryName(for: selectedCountryCode))\(isAutoDetected ? ", auto-detected" : "")")
-            .accessibilityHint("Double tap to change the bypass country")
-        }
-        .padding(Design.Spacing.md)
-        .background(Design.Colors.surfaceCard)
-        .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                .strokeBorder(Design.Colors.textTertiary.opacity(0.2), lineWidth: 0.5)
         )
+        .animation(Design.Animation.springDefault, value: isActive)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Smart Routing toggle, currently \(isEnabled ? "enabled" : "disabled"), country: \(Self.countryName(for: selectedCountryCode))")
     }
 
-    // MARK: - Bypass Rules Section
+    private var countryPickerButton: some View {
+        Menu {
+            ForEach(Self.countries, id: \.code) { country in
+                Button {
+                    withAnimation(Design.Animation.springQuick) {
+                        selectedCountryCode = country.code
+                    }
+                } label: {
+                    Label {
+                        Text("\(country.flag) \(country.name)")
+                    } icon: {
+                        if selectedCountryCode == country.code {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: Design.Spacing.xs) {
+                Text(Self.flagEmoji(for: selectedCountryCode))
+                    .font(.system(size: 16))
+
+                Text(Self.countryName(for: selectedCountryCode))
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Design.Colors.textSecondary)
+
+                if isAutoDetected {
+                    Text("(auto)")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Design.Colors.accent)
+                }
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Design.Colors.textTertiary)
+            }
+        }
+        .accessibilityLabel("Bypass country: \(Self.countryName(for: selectedCountryCode))")
+        .accessibilityHint("Double tap to change the bypass country")
+    }
+
+    // MARK: - Bypass Rules Section (with toggles)
 
     private var bypassRulesSection: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.sm) {
@@ -313,18 +226,35 @@ struct SmartRoutingView: View {
                 .padding(.leading, Design.Spacing.xs)
 
             VStack(spacing: Design.Spacing.xs) {
-                ForEach(bypassRules) { rule in
-                    bypassRow(icon: rule.icon, text: rule.text)
-                }
+                bypassToggleRow(
+                    icon: "globe",
+                    text: "\(activeTLD) websites",
+                    isOn: $bypassTLDWebsites
+                )
+                bypassToggleRow(
+                    icon: "building.columns.fill",
+                    text: "Government & banking",
+                    isOn: $bypassGovernmentBanking
+                )
+                bypassToggleRow(
+                    icon: "play.tv.fill",
+                    text: "Local streaming & media",
+                    isOn: $bypassStreamingMedia
+                )
+                bypassToggleRow(
+                    icon: "cart.fill",
+                    text: "Domestic e-commerce",
+                    isOn: $bypassEcommerce
+                )
             }
         }
     }
 
-    private func bypassRow(icon: String, text: String) -> some View {
+    private func bypassToggleRow(icon: String, text: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: Design.Spacing.md) {
             Image(systemName: icon)
                 .font(.body)
-                .foregroundStyle(isActive ? Design.Colors.accent : Design.Colors.textTertiary)
+                .foregroundStyle(isActive && isOn.wrappedValue ? Design.Colors.accent : Design.Colors.textTertiary)
                 .frame(width: 24)
 
             Text(text)
@@ -333,18 +263,19 @@ struct SmartRoutingView: View {
 
             Spacer()
 
-            Image(systemName: isActive ? "checkmark" : "minus")
-                .font(.system(.caption, design: .rounded, weight: .semibold))
-                .foregroundStyle(isActive ? Design.Colors.connected : Design.Colors.textTertiary)
-                .contentTransition(.symbolEffect(.replace))
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(Design.Colors.connected)
+                .disabled(togglesDisabled)
         }
         .padding(Design.Spacing.md)
         .background(Design.Colors.surfaceCard)
         .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
-        .opacity(isActive ? 1.0 : 0.5)
+        .opacity(togglesDisabled ? 0.5 : 1.0)
         .animation(Design.Animation.springDefault, value: isActive)
+        .animation(Design.Animation.springDefault, value: isOn.wrappedValue)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(text): \(isActive ? "Active" : "Inactive")")
+        .accessibilityLabel("\(text): \(isOn.wrappedValue ? "Enabled" : "Disabled")")
     }
 
     // MARK: - Custom Domains Section
@@ -539,7 +470,11 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             selectedCountryCode: .constant("DE"),
             detectedCountryCode: "DE",
             vpnStatus: .connected,
-            customDomains: .constant(["sparkasse.de", "commerzbank.de"])
+            customDomains: .constant(["sparkasse.de", "commerzbank.de"]),
+            bypassTLDWebsites: .constant(true),
+            bypassGovernmentBanking: .constant(true),
+            bypassStreamingMedia: .constant(true),
+            bypassEcommerce: .constant(true)
         )
     }
 }
@@ -551,7 +486,11 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             selectedCountryCode: .constant("DE"),
             detectedCountryCode: "DE",
             vpnStatus: .disconnected,
-            customDomains: .constant(["mybank.de"])
+            customDomains: .constant(["mybank.de"]),
+            bypassTLDWebsites: .constant(true),
+            bypassGovernmentBanking: .constant(true),
+            bypassStreamingMedia: .constant(false),
+            bypassEcommerce: .constant(true)
         )
     }
 }
@@ -563,7 +502,11 @@ private struct SmartRoutingPulseModifier: ViewModifier {
             selectedCountryCode: .constant("GB"),
             detectedCountryCode: nil,
             vpnStatus: .disconnected,
-            customDomains: .constant([])
+            customDomains: .constant([]),
+            bypassTLDWebsites: .constant(true),
+            bypassGovernmentBanking: .constant(true),
+            bypassStreamingMedia: .constant(true),
+            bypassEcommerce: .constant(true)
         )
     }
 }

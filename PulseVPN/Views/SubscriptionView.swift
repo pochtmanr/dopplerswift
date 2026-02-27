@@ -43,15 +43,13 @@ struct SubscriptionView: View {
         .navigationTitle("Subscription")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showPaywall) {
-            PaywallView(rcService: rcService, isPresented: $showPaywall)
-        }
-        #else
+        #endif
         .sheet(isPresented: $showPaywall) {
             PaywallView(rcService: rcService, isPresented: $showPaywall)
-                .frame(minWidth: 440, minHeight: 600)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
         }
-        #endif
         .task {
             await rcService.refreshCustomerInfo()
         }
@@ -108,11 +106,6 @@ struct SubscriptionView: View {
                 Text(rcService.isPro ? "All features unlocked" : "Upgrade for premium servers")
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
-
-                
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
 
                 // Expiration / Renewal info
                 if let expiry = rcService.expirationDate, rcService.isPro {
@@ -196,44 +189,18 @@ struct SubscriptionView: View {
 
     @ViewBuilder
     private var manageSection: some View {
-        Button {
+        SecondaryCTAButton("Manage Subscription", icon: "arrow.up.right") {
             openSubscriptionManagement()
-        } label: {
-            HStack {
-                Label("Manage Subscription", systemImage: "arrow.up.right")
-                    .font(.system(.body, design: .rounded, weight: .semibold))
-                Spacer()
-            }
-            .padding(Design.Spacing.md)
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: Design.CornerRadius.lg))
-        .tint(.accentColor)
     }
 
     // MARK: - Upgrade Button (Free users)
 
     @ViewBuilder
     private var upgradeButton: some View {
-        Button {
+        PrimaryCTAButton(title: "Upgrade to Pro") {
             showPaywall = true
-        } label: {
-            Text("Upgrade to Pro")
-                .font(.system(.body, design: .rounded, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        colors: [Design.Colors.accent, Design.Colors.accentDark],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: .rect(cornerRadius: Design.CornerRadius.lg)
-                )
-                .shadow(color: Design.Colors.accent.opacity(0.3), radius: 12, y: 6)
         }
-        .buttonStyle(SubscriptionScaleButtonStyle())
     }
 
     // MARK: - Secondary Actions
@@ -325,17 +292,6 @@ struct SubscriptionView: View {
             try? await Task.sleep(for: .seconds(4))
             restoreMessage = nil
         }
-    }
-}
-
-// MARK: - Scale Button Style
-
-private struct SubscriptionScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: configuration.isPressed)
     }
 }
 

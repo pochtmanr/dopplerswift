@@ -56,7 +56,7 @@ struct ServerListView: View {
 
     @ViewBuilder
     private var serverList: some View {
-        List(selection: $selectedServerID) {
+        List {
             if !cloudServers.isEmpty || isLoadingCloud {
                 cloudSection
             }
@@ -114,7 +114,6 @@ struct ServerListView: View {
         Section {
             ForEach(filteredManualServers) { server in
                 manualServerRow(server)
-                    .tag(server.id)
             }
             .onDelete(perform: deleteManualServers)
         } header: {
@@ -151,7 +150,6 @@ struct ServerListView: View {
         } label: {
             cloudServerRowContent(server, isSelected: selected)
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("\(server.name), \(server.locationDisplay)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -170,6 +168,7 @@ struct ServerListView: View {
             cloudServerTrailing(server, isSelected: isSelected)
         }
         .padding(.vertical, Design.Spacing.xs)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -217,41 +216,49 @@ struct ServerListView: View {
 
     @ViewBuilder
     private func manualServerRow(_ server: ServerConfig) -> some View {
-        HStack(spacing: Design.Spacing.md) {
-            Image(systemName: "globe")
-                .font(.title3)
-                .foregroundStyle(Design.Colors.accent)
-                .frame(width: Design.Size.flagSize)
+        let selected = server.id == selectedServerID
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(server.displayName)
-                    .font(.system(.body, design: .rounded, weight: server.id == selectedServerID ? .bold : .medium))
-                    .foregroundStyle(Design.Colors.textPrimary)
+        Button {
+            withAnimation(Design.Animation.springQuick) {
+                selectedServerID = server.id
+            }
+        } label: {
+            HStack(spacing: Design.Spacing.md) {
+                Image(systemName: "globe")
+                    .font(.title3)
+                    .foregroundStyle(Design.Colors.accent)
+                    .frame(width: Design.Size.flagSize)
 
-                HStack(spacing: Design.Spacing.xs) {
-                    Text(server.subtitle)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Design.Colors.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(server.displayName)
+                        .font(.system(.body, design: .rounded, weight: selected ? .bold : .medium))
+                        .foregroundStyle(Design.Colors.textPrimary)
 
-                    if server.vlessConfig.security != "none" {
-                        securityBadge(server.vlessConfig.security)
+                    HStack(spacing: Design.Spacing.xs) {
+                        Text(server.subtitle)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Design.Colors.textSecondary)
+
+                        if server.vlessConfig.security != "none" {
+                            securityBadge(server.vlessConfig.security)
+                        }
                     }
                 }
-            }
 
-            Spacer()
+                Spacer()
 
-            if server.id == selectedServerID {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Design.Colors.accent)
-                    .font(.body)
-                    .transition(.scale.combined(with: .opacity))
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Design.Colors.accent)
+                        .font(.body)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
+            .padding(.vertical, Design.Spacing.xs)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, Design.Spacing.xs)
-        .contentShape(Rectangle())
         .accessibilityLabel(server.displayName)
-        .accessibilityAddTraits(server.id == selectedServerID ? .isSelected : [])
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: - Support Views

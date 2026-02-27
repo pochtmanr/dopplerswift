@@ -8,48 +8,46 @@ struct MapCardView: View {
     let serverGeo: IPGeolocation?
     let isConnected: Bool
     var isExpanded: Bool = false
+    var hops: [TraceHop] = []
     var onToggleExpand: (() -> Void)?
 
     @State private var position: MapCameraPosition = .automatic
 
-    private var cardHeight: CGFloat {
-        isExpanded ? Design.Size.mapCardHeightExpanded : Design.Size.mapCardHeight
+    // Height is controlled externally via .aspectRatio() in HomeView
+
+    /// Hops that have valid coordinates for map display.
+    private var geolocatedHops: [TraceHop] {
+        hops.filter { $0.isGeolocated }
+    }
+
+    /// All waypoints in order: user → hops → server.
+    private var allWaypoints: [CLLocationCoordinate2D] {
+        var points: [CLLocationCoordinate2D] = []
+        if let coord = userGeo?.coordinate { points.append(coord) }
+        points.append(contentsOf: geolocatedHops.compactMap(\.coordinate))
+        if let coord = serverGeo?.coordinate { points.append(coord) }
+        return points
     }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             mapContent
 
-            // Visual button (non-interactive when expanded — collapseHitArea handles it)
-            VStack {
-                HStack {
-                    Spacer()
-                    expandButton
-                        .padding(Design.Spacing.sm)
-                        .allowsHitTesting(!isExpanded)
-                }
+            // Bottom overlays
+            HStack(alignment: .bottom) {
+                infoOverlay
+
                 Spacer()
             }
-
-            // Invisible tap target that sits above the map when expanded
-            collapseHitArea
-
-            infoOverlay
         }
-        .frame(height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
         .contentShape(RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-        .onTapGesture {
-            if !isExpanded {
-                onToggleExpand?()
-            }
-        }
-        .animation(Design.Animation.springDefault, value: isExpanded)
         .onChange(of: userGeo?.ip) { _, _ in updateCamera() }
         .onChange(of: serverGeo?.ip) { _, _ in updateCamera() }
         .onChange(of: isExpanded) { _, expanded in
             if !expanded { updateCamera() }
         }
+        .onChange(of: hops.count) { _, _ in updateCamera() }
         .onAppear { updateCamera() }
     }
 
@@ -58,6 +56,7 @@ struct MapCardView: View {
     @ViewBuilder
     private var mapContent: some View {
         Map(position: $position, interactionModes: isExpanded ? [.pan, .zoom] : []) {
+            // User annotation
             if let coord = userGeo?.coordinate {
                 Annotation("You", coordinate: coord) {
                     Image(systemName: "person.circle.fill")
@@ -67,6 +66,7 @@ struct MapCardView: View {
                 }
             }
 
+            // Server annotation
             if let coord = serverGeo?.coordinate {
                 Annotation("Server", coordinate: coord) {
                     Image(systemName: "server.rack")
@@ -76,19 +76,65 @@ struct MapCardView: View {
                 }
             }
 
-            // Geodesic arc connecting user to server
-            if let userCoord = userGeo?.coordinate,
-               let serverCoord = serverGeo?.coordinate {
-                MapPolyline(coordinates: geodesicArc(from: userCoord, to: serverCoord))
-                    .stroke(
-                        Design.Colors.accent.opacity(0.5),
-                        style: StrokeStyle(lineWidth: 2, dash: [8, 4])
-                    )
+            // Hop annotations (only when expanded and hops exist)
+            if isExpanded {
+                ForEach(geolocatedHops) { hop in
+                    if let coord = hop.coordinate {
+                        Annotation("Hop \(hop.hopNumber)", coordinate: coord) {
+                            ZStack {
+                                Circle()
+                                    .fill(.orange)
+                                    .frame(width: 10, height: 10)
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 4, height: 4)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Route lines
+            if geolocatedHops.isEmpty {
+                // No hops: single geodesic arc user → server
+                if let userCoord = userGeo?.coordinate,
+                   let serverCoord = serverGeo?.coordinate {
+                    MapPolyline(coordinates: geodesicArc(from: userCoord, to: serverCoord))
+                        .stroke(
+                            Design.Colors.accent.opacity(0.5),
+                            style: StrokeStyle(lineWidth: 2, dash: [8, 4])
+                        )
+                }
+            } else {
+                // Hops exist: segmented arcs through waypoints
+                ForEach(0..<max(allWaypoints.count - 1, 0), id: \.self) { i in
+                    MapPolyline(coordinates: geodesicArc(from: allWaypoints[i], to: allWaypoints[i + 1]))
+                        .stroke(
+                            .orange.opacity(0.6),
+                            style: StrokeStyle(lineWidth: 2, dash: [6, 3])
+                        )
+                }
             }
         }
         .mapStyle(.standard(elevation: .flat))
         // When collapsed, disable map hit testing so card tap gesture works
         .allowsHitTesting(isExpanded)
+    }
+
+    // MARK: - Hop Count Badge
+
+    @ViewBuilder
+    private var hopCountBadge: some View {
+        let total = hops.count
+        let located = geolocatedHops.count
+
+        Text("\(total) hops (\(located) located)")
+            .font(.system(.caption2, design: .rounded, weight: .medium))
+            .foregroundStyle(Design.Colors.textPrimary)
+            .padding(.horizontal, Design.Spacing.sm)
+            .padding(.vertical, Design.Spacing.xs)
+            .glassEffect(.regular, in: .capsule)
+            .padding(Design.Spacing.sm)
     }
 
     // MARK: - Geodesic Arc
@@ -196,10 +242,15 @@ struct MapCardView: View {
     // MARK: - Camera
 
     private func updateCamera() {
-        let coordinates: [CLLocationCoordinate2D] = [
+        var coordinates: [CLLocationCoordinate2D] = [
             userGeo?.coordinate,
             serverGeo?.coordinate
         ].compactMap { $0 }
+
+        // Include hop coordinates when expanded
+        if isExpanded {
+            coordinates.append(contentsOf: geolocatedHops.compactMap(\.coordinate))
+        }
 
         guard !coordinates.isEmpty else {
             position = .automatic

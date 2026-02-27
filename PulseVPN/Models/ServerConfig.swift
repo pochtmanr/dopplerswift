@@ -17,6 +17,8 @@ struct ServerConfig: Codable, Identifiable, Hashable, Sendable {
     let source: ServerSource
 
     // Optional metadata from Supabase for cloud servers
+    var name: String?
+    var supabaseID: UUID?
     var country: String?
     var countryCode: String?
     var city: String?
@@ -29,6 +31,8 @@ struct ServerConfig: Codable, Identifiable, Hashable, Sendable {
         vlessConfig: VLessConfig,
         isSelected: Bool = false,
         source: ServerSource = .manual,
+        name: String? = nil,
+        supabaseID: UUID? = nil,
         country: String? = nil,
         countryCode: String? = nil,
         city: String? = nil,
@@ -41,6 +45,8 @@ struct ServerConfig: Codable, Identifiable, Hashable, Sendable {
         self.vlessConfig = vlessConfig
         self.isSelected = isSelected
         self.source = source
+        self.name = name
+        self.supabaseID = supabaseID
         self.country = country
         self.countryCode = countryCode
         self.city = city
@@ -51,7 +57,8 @@ struct ServerConfig: Codable, Identifiable, Hashable, Sendable {
     }
 
     var displayName: String {
-        vlessConfig.remark.isEmpty ? vlessConfig.address : vlessConfig.remark
+        if let name, !name.isEmpty { return name }
+        return vlessConfig.remark.isEmpty ? vlessConfig.address : vlessConfig.remark
     }
 
     /// Country flag emoji from the country code.

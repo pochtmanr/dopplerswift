@@ -17,6 +17,12 @@ struct ContentView: View {
     @State private var smartRoutingCustomDomains: [String] = ConfigStore.loadSmartRoutingCustomDomains()
     @State private var detectedCountryCode: String?
 
+    // Bypass category toggles
+    @State private var bypassTLDWebsites: Bool = ConfigStore.loadBypassTLDWebsites()
+    @State private var bypassGovernmentBanking: Bool = ConfigStore.loadBypassGovernmentBanking()
+    @State private var bypassStreamingMedia: Bool = ConfigStore.loadBypassStreamingMedia()
+    @State private var bypassEcommerce: Bool = ConfigStore.loadBypassEcommerce()
+
     @State private var cloudServers: [SupabaseServer] = []
     @State private var isLoadingCloud = false
     @State private var cloudError: String?
@@ -104,22 +110,71 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        HomeView(
-            vpnManager: vpnManager,
-            selectedServer: selectedServer,
-            onConnectAndConvert: convertAndConnect,
-            smartRoutingEnabled: $smartRoutingEnabled,
-            smartRoutingCountry: effectiveSmartRoutingCountry
-        )
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showPaywall) {
-            PaywallView(rcService: rcService, isPresented: $showPaywall)
+        TabView(selection: $selectedTab) {
+            Tab("VPN", systemImage: "shield.fill", value: .vpn) {
+                HomeView(
+                    vpnManager: vpnManager,
+                    selectedServer: selectedServer,
+                    onConnectAndConvert: convertAndConnect,
+                    onSmartRouteTap: { selectedTab = .smartRoute },
+                    smartRoutingEnabled: $smartRoutingEnabled,
+                    smartRoutingCountry: effectiveSmartRoutingCountry
+                )
+            }
+
+            Tab("Smart Route", systemImage: "arrow.triangle.branch", value: .smartRoute) {
+                SmartRoutingView(
+                    isEnabled: $smartRoutingEnabled,
+                    selectedCountryCode: $smartRoutingCountry,
+                    detectedCountryCode: detectedCountryCode,
+                    vpnStatus: vpnManager.status,
+                    customDomains: $smartRoutingCustomDomains,
+                    bypassTLDWebsites: $bypassTLDWebsites,
+                    bypassGovernmentBanking: $bypassGovernmentBanking,
+                    bypassStreamingMedia: $bypassStreamingMedia,
+                    bypassEcommerce: $bypassEcommerce
+                )
+            }
+
+            Tab("Profile", systemImage: "person.circle", value: .profile) {
+                ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager)
+            }
         }
-        #else
+        .tint(Design.Colors.accent)
         .sheet(isPresented: $showPaywall) {
             PaywallView(rcService: rcService, isPresented: $showPaywall)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.clear)
         }
-        #endif
+        .onChange(of: smartRoutingEnabled) {
+            ConfigStore.saveSmartRoutingEnabled(smartRoutingEnabled)
+            reconnectIfNeeded()
+        }
+        .onChange(of: smartRoutingCountry) {
+            ConfigStore.saveSmartRoutingCountry(smartRoutingCountry)
+            reconnectIfNeeded()
+        }
+        .onChange(of: smartRoutingCustomDomains) {
+            ConfigStore.saveSmartRoutingCustomDomains(smartRoutingCustomDomains)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassTLDWebsites) {
+            ConfigStore.saveBypassTLDWebsites(bypassTLDWebsites)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassGovernmentBanking) {
+            ConfigStore.saveBypassGovernmentBanking(bypassGovernmentBanking)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassStreamingMedia) {
+            ConfigStore.saveBypassStreamingMedia(bypassStreamingMedia)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassEcommerce) {
+            ConfigStore.saveBypassEcommerce(bypassEcommerce)
+            reconnectIfNeeded()
+        }
     }
 
     // MARK: - Compact (iPhone) Layout
@@ -135,10 +190,11 @@ struct ContentView: View {
                         selectedServer: selectedServer,
                         onConnectAndConvert: convertAndConnect,
                         onServerTap: { showServerList = true },
+                        onSmartRouteTap: { selectedTab = .smartRoute },
                         smartRoutingEnabled: $smartRoutingEnabled,
                         smartRoutingCountry: effectiveSmartRoutingCountry
                     )
-                    .navigationTitle("Doppler VPN")
+                    .navigationTitle("Pulse Route")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -157,8 +213,11 @@ struct ContentView: View {
                     .sheet(isPresented: $showAddServer) {
                         addServerSheet
                     }
-                    .fullScreenCover(isPresented: $showPaywall) {
+                    .sheet(isPresented: $showPaywall) {
                         PaywallView(rcService: rcService, isPresented: $showPaywall)
+                            .presentationDetents([.large])
+                            .presentationDragIndicator(.visible)
+                            .presentationBackground(.clear)
                     }
                 }
             }
@@ -170,9 +229,13 @@ struct ContentView: View {
                         selectedCountryCode: $smartRoutingCountry,
                         detectedCountryCode: detectedCountryCode,
                         vpnStatus: vpnManager.status,
-                        customDomains: $smartRoutingCustomDomains
+                        customDomains: $smartRoutingCustomDomains,
+                        bypassTLDWebsites: $bypassTLDWebsites,
+                        bypassGovernmentBanking: $bypassGovernmentBanking,
+                        bypassStreamingMedia: $bypassStreamingMedia,
+                        bypassEcommerce: $bypassEcommerce
                     )
-                    .navigationTitle("Doppler VPN")
+                    .navigationTitle("Smart Route")
                     .navigationBarTitleDisplayMode(.large)
                 }
             }
@@ -200,6 +263,22 @@ struct ContentView: View {
         }
         .onChange(of: smartRoutingCustomDomains) {
             ConfigStore.saveSmartRoutingCustomDomains(smartRoutingCustomDomains)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassTLDWebsites) {
+            ConfigStore.saveBypassTLDWebsites(bypassTLDWebsites)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassGovernmentBanking) {
+            ConfigStore.saveBypassGovernmentBanking(bypassGovernmentBanking)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassStreamingMedia) {
+            ConfigStore.saveBypassStreamingMedia(bypassStreamingMedia)
+            reconnectIfNeeded()
+        }
+        .onChange(of: bypassEcommerce) {
+            ConfigStore.saveBypassEcommerce(bypassEcommerce)
             reconnectIfNeeded()
         }
         .onChange(of: showServerList) {
@@ -308,11 +387,20 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func convertAndConnect(_ config: VLessConfig) async throws {
+        NSLog("[ContentView] Connecting to %@:%d (security=%@, sni=%@)",
+              config.address, config.port, config.security, config.sni ?? "nil")
+
+        // Any of the IP-based categories being on means we include geoip routing
+        let anyIPCategoryOn = bypassGovernmentBanking || bypassStreamingMedia || bypassEcommerce
+
         let xrayJSON = XrayConfigBuilder.buildJSON(
             from: config,
             smartRoutingCountry: effectiveSmartRoutingCountry,
-            smartRoutingCustomDomains: smartRoutingEnabled ? smartRoutingCustomDomains : []
+            smartRoutingCustomDomains: smartRoutingEnabled ? smartRoutingCustomDomains : [],
+            bypassTLDWebsites: bypassTLDWebsites,
+            bypassDomesticIPs: anyIPCategoryOn
         )
+        NSLog("[ContentView] Xray config length: %d", xrayJSON.count)
         try await vpnManager.connect(xrayJSON: xrayJSON)
     }
 
@@ -360,11 +448,100 @@ struct ContentView: View {
 
         do {
             cloudServers = try await SupabaseServerService.fetchServers()
+            refreshCachedCloudServers()
         } catch {
             cloudError = error.localizedDescription
         }
 
         isLoadingCloud = false
+    }
+
+    /// Full sync of cached cloud servers with Supabase:
+    /// - Updates existing servers (re-parses VLESS URI + metadata)
+    /// - Removes servers no longer in Supabase
+    /// - Adds new servers from Supabase
+    private func refreshCachedCloudServers() {
+        guard !cloudServers.isEmpty else { return }
+
+        let previousSelectedID = selectedServerID
+        var newServers = servers.filter { $0.source == .manual }
+
+        for cloud in cloudServers {
+            guard let vlessConfig = Self.parseVLessURI(from: cloud) else {
+                NSLog("[ContentView] Skipping server '%@': failed to parse VLESS URI", cloud.name)
+                continue
+            }
+
+            let config = ServerConfig(
+                vlessConfig: vlessConfig,
+                source: .cloud,
+                name: cloud.name,
+                supabaseID: cloud.id,
+                country: cloud.country,
+                countryCode: cloud.countryCode,
+                city: cloud.city,
+                loadPercentage: cloud.loadPercentage,
+                isPremium: cloud.isPremium,
+                latencyMs: cloud.latencyMs,
+                speedMbps: cloud.speedMbps
+            )
+            newServers.append(config)
+        }
+
+        servers = newServers
+
+        // Restore selection: match by supabaseID, IP address, or pick first available
+        if let prevID = previousSelectedID {
+            if servers.contains(where: { $0.id == prevID }) {
+                // Exact ID match (manual servers or unlikely same UUID)
+                selectedServerID = prevID
+            } else {
+                // Old server got a new VLessConfig ID after re-parse — match by supabaseID or IP
+                let oldServer = ConfigStore.loadServers().first { $0.id == prevID }
+                let refreshed: ServerConfig? = {
+                    if let sid = oldServer?.supabaseID {
+                        return servers.first { $0.supabaseID == sid }
+                    }
+                    if let addr = oldServer?.vlessConfig.address {
+                        return servers.first { $0.vlessConfig.address == addr }
+                    }
+                    return nil
+                }()
+
+                if let refreshed {
+                    selectedServerID = refreshed.id
+                    NSLog("[ContentView] Restored selection to refreshed server: %@", refreshed.name ?? refreshed.vlessConfig.address)
+                } else {
+                    selectedServerID = servers.first(where: { $0.isPremium != true })?.id ?? servers.first?.id
+                    NSLog("[ContentView] Previously selected server removed, auto-selected: %@",
+                          selectedServerID?.uuidString ?? "none")
+                }
+            }
+        }
+
+        NSLog("[ContentView] Synced servers: %d cloud + %d manual",
+              servers.filter({ $0.source == .cloud }).count,
+              servers.filter({ $0.source == .manual }).count)
+    }
+
+    /// Extracts and parses a VLessConfig from a SupabaseServer's config_data.
+    private static func parseVLessURI(from server: SupabaseServer) -> VLessConfig? {
+        guard let configData = server.configData, !configData.isEmpty else { return nil }
+
+        let rawURI: String
+        let trimmed = configData.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("vless://") {
+            rawURI = trimmed
+        } else if let decoded = Data(base64Encoded: trimmed),
+                  let decodedString = String(data: decoded, encoding: .utf8),
+                  let vlessLine = decodedString.components(separatedBy: .newlines)
+                    .first(where: { $0.lowercased().hasPrefix("vless://") }) {
+            rawURI = vlessLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            return nil
+        }
+
+        return try? VLessParser.parse(rawURI)
     }
 
     private func selectCloudServer(_ supabaseServer: SupabaseServer) {
@@ -373,39 +550,9 @@ struct ContentView: View {
             return
         }
 
-        guard let configData = supabaseServer.configData, !configData.isEmpty else {
-            NSLog("[ContentView] Server '%@' has no config_data", supabaseServer.name)
-            vpnManager.errorMessage = "Server '\(supabaseServer.name)' has no configuration data."
-            return
-        }
-
-        // Resolve the raw VLESS URI — handle both raw and base64-encoded formats
-        let rawURI: String
-        if configData.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("vless://") {
-            rawURI = configData.trimmingCharacters(in: .whitespacesAndNewlines)
-        } else if let decoded = Data(base64Encoded: configData.trimmingCharacters(in: .whitespacesAndNewlines)),
-                  let decodedString = String(data: decoded, encoding: .utf8) {
-            // Marzban subscriptions may contain multiple URIs separated by newlines — take the first VLESS one
-            let lines = decodedString.components(separatedBy: .newlines)
-            if let vlessLine = lines.first(where: { $0.lowercased().hasPrefix("vless://") }) {
-                rawURI = vlessLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                NSLog("[ContentView] Base64 decoded but no vless:// URI found for '%@': %@", supabaseServer.name, decodedString.prefix(200).description)
-                vpnManager.errorMessage = "No VLESS config found for '\(supabaseServer.name)'."
-                return
-            }
-        } else {
-            NSLog("[ContentView] Unrecognized config format for '%@': %@", supabaseServer.name, configData.prefix(100).description)
-            vpnManager.errorMessage = "Unrecognized config format for '\(supabaseServer.name)'."
-            return
-        }
-
-        let vlessConfig: VLessConfig
-        do {
-            vlessConfig = try VLessParser.parse(rawURI)
-        } catch {
-            NSLog("[ContentView] Failed to parse VLESS URI for '%@': %@", supabaseServer.name, error.localizedDescription)
-            vpnManager.errorMessage = "Invalid config for '\(supabaseServer.name)': \(error.localizedDescription)"
+        guard let vlessConfig = Self.parseVLessURI(from: supabaseServer) else {
+            NSLog("[ContentView] Failed to parse config for '%@'", supabaseServer.name)
+            vpnManager.errorMessage = "Invalid or missing config for '\(supabaseServer.name)'."
             return
         }
 
@@ -415,6 +562,8 @@ struct ContentView: View {
         let newConfig = ServerConfig(
             vlessConfig: vlessConfig,
             source: .cloud,
+            name: supabaseServer.name,
+            supabaseID: supabaseServer.id,
             country: supabaseServer.country,
             countryCode: supabaseServer.countryCode,
             city: supabaseServer.city,
@@ -425,7 +574,7 @@ struct ContentView: View {
         )
 
         // Replace existing cloud entry for this Supabase server, or append new
-        if let index = servers.firstIndex(where: { $0.source == .cloud && $0.vlessConfig.address == vlessConfig.address }) {
+        if let index = servers.firstIndex(where: { $0.source == .cloud && ($0.supabaseID == supabaseServer.id || $0.vlessConfig.address == vlessConfig.address) }) {
             servers[index] = newConfig
         } else {
             servers.append(newConfig)
