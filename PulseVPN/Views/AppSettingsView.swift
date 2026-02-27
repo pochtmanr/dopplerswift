@@ -1,0 +1,51 @@
+import SwiftUI
+
+struct AppSettingsView: View {
+    let vpnManager: VPNManager
+
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("connectOnLaunch") private var connectOnLaunch = false
+    @AppStorage("killSwitch") private var killSwitch = false
+
+    var body: some View {
+        List {
+            Section("Connection") {
+                Toggle("Connect on Launch", isOn: $connectOnLaunch)
+                Toggle("Kill Switch", isOn: $killSwitch)
+            }
+
+            Section("Notifications") {
+                Toggle("Push Notifications", isOn: $notificationsEnabled)
+            }
+
+            Section("Developer") {
+                NavigationLink {
+                    TunnelDebugView()
+                } label: {
+                    Label("Tunnel Logs", systemImage: "ant.fill")
+                }
+            }
+        }
+        .navigationTitle("App Settings")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .onChange(of: killSwitch) {
+            Task {
+                await vpnManager.setKillSwitch(enabled: killSwitch)
+            }
+        }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+}
+
+#Preview {
+    NavigationStack {
+        AppSettingsView(vpnManager: VPNManager())
+    }
+}
