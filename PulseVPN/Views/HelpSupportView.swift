@@ -226,6 +226,11 @@ private struct FAQItem: Identifiable {
             icon: "speedometer"
         ),
         FAQItem(
+            question: "What is Smart Route?",
+            answer: "Smart Route lets domestic websites and services bypass the VPN so they load faster and work correctly. Choose your home country, and Pulse Route automatically routes local banking, government, streaming, and e-commerce traffic directly. You can also add custom domains to always bypass VPN.",
+            icon: "arrow.triangle.branch"
+        ),
+        FAQItem(
             question: "How do I manage my subscription?",
             answer: "Go to Profile → Subscription to view your current plan. You can upgrade, restore purchases, or manage your subscription through the App Store.",
             icon: "creditcard"

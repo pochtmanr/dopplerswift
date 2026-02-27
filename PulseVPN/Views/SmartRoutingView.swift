@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 struct SmartRoutingView: View {
     @Binding var isEnabled: Bool
@@ -15,6 +20,16 @@ struct SmartRoutingView: View {
 
     @State private var showAddDomain = false
     @State private var newDomainText = ""
+
+    // Favicon cache: key absent = loading, .some(image) = success, .some(nil) = failed
+    #if os(iOS)
+    @State private var favicons: [String: UIImage?] = [:]
+    #else
+    @State private var favicons: [String: NSImage?] = [:]
+    #endif
+
+    // Paste error feedback
+    @State private var pasteErrorMessage: String?
 
     // MARK: - Country Data
 
@@ -85,6 +100,8 @@ struct SmartRoutingView: View {
             .padding(.vertical, Design.Spacing.lg)
         }
         .background(Design.Colors.surfaceBackground)
+        .onAppear { fetchMissingFavicons() }
+        .onChange(of: customDomains) { _, _ in fetchMissingFavicons() }
         .alert("Add Custom Domain", isPresented: $showAddDomain) {
             TextField("e.g., mybank.de", text: $newDomainText)
                 #if os(iOS)
@@ -294,6 +311,7 @@ struct SmartRoutingView: View {
             }
 
             addDomainButton
+            learnMoreLink
         }
     }
 
@@ -336,9 +354,7 @@ struct SmartRoutingView: View {
 
     private func domainRow(domain: String, index: Int) -> some View {
         HStack(spacing: Design.Spacing.md) {
-            Image(systemName: "globe")
-                .font(.body)
-                .foregroundStyle(isActive ? Design.Colors.accent : Design.Colors.textTertiary)
+            faviconView(for: domain)
                 .frame(width: 24)
 
             Text(domain)
@@ -373,29 +389,85 @@ struct SmartRoutingView: View {
     }
 
     private var addDomainButton: some View {
-        Button {
-            showAddDomain = true
-        } label: {
-            HStack(spacing: Design.Spacing.sm) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.body)
+        VStack(spacing: Design.Spacing.xs) {
+            Button {
+                showAddDomain = true
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
 
-                Text("Add Domain")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    Text("Add Domain")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                }
+                .foregroundStyle(Design.Colors.accent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Design.Spacing.md)
+                .background(Design.Colors.accent.opacity(0.1))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Design.Colors.accent.opacity(0.3), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add custom domain")
+            .accessibilityHint("Double tap to add a domain to the bypass list")
+
+            #if os(iOS)
+            Button {
+                pasteFromClipboard()
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.body)
+
+                    Text("Paste from Clipboard")
+                        .font(.system(.subheadline, design: .rounded, weight: .medium))
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Design.Spacing.md)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .opacity(UIPasteboard.general.hasStrings ? 1.0 : 0.4)
+            .disabled(!UIPasteboard.general.hasStrings)
+            .accessibilityLabel("Paste domain from clipboard")
+            .accessibilityHint("Double tap to paste a domain from your clipboard")
+
+            if let errorMessage = pasteErrorMessage {
+                Text(errorMessage)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var learnMoreLink: some View {
+        NavigationLink {
+            HelpSupportView()
+        } label: {
+            HStack(spacing: Design.Spacing.xs) {
+                Text("Learn how Smart Route works")
+                    .font(.system(.caption, design: .rounded))
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .semibold))
             }
             .foregroundStyle(Design.Colors.accent)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Design.Spacing.md)
-            .background(Design.Colors.accent.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: Design.CornerRadius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                    .strokeBorder(Design.Colors.accent.opacity(0.3), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Add custom domain")
-        .accessibilityHint("Double tap to add a domain to the bypass list")
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, Design.Spacing.xs)
     }
 
     // MARK: - Footer
@@ -406,6 +478,68 @@ struct SmartRoutingView: View {
             .foregroundStyle(Design.Colors.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.top, Design.Spacing.sm)
+    }
+
+    // MARK: - Favicon
+
+    @ViewBuilder
+    private func faviconView(for domain: String) -> some View {
+        if let cached = favicons[domain] {
+            if let image = cached {
+                #if os(iOS)
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                #else
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                #endif
+            } else {
+                Image(systemName: "globe")
+                    .font(.body)
+                    .foregroundStyle(isActive ? Design.Colors.accent : Design.Colors.textTertiary)
+            }
+        } else {
+            ProgressView()
+                .frame(width: 20, height: 20)
+        }
+    }
+
+    private func fetchMissingFavicons() {
+        for domain in customDomains where favicons[domain] == nil {
+            Task { await fetchFavicon(for: domain) }
+        }
+    }
+
+    private func fetchFavicon(for domain: String) async {
+        guard let url = URL(string: "https://www.google.com/s2/favicons?domain=\(domain)&sz=64") else {
+            favicons[domain] = .some(nil)
+            return
+        }
+        do {
+            let request = URLRequest(url: url, timeoutInterval: 5)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            #if os(iOS)
+            if let image = UIImage(data: data), image.size.width > 1 {
+                favicons[domain] = image
+            } else {
+                favicons[domain] = .some(nil)
+            }
+            #else
+            if let image = NSImage(data: data), image.size.width > 1 {
+                favicons[domain] = image
+            } else {
+                favicons[domain] = .some(nil)
+            }
+            #endif
+        } catch {
+            favicons[domain] = .some(nil)
+        }
     }
 
     // MARK: - Actions
@@ -425,6 +559,90 @@ struct SmartRoutingView: View {
         }
         newDomainText = ""
     }
+
+    #if os(iOS)
+    private func pasteFromClipboard() {
+        guard let raw = UIPasteboard.general.string else {
+            showPasteError("Nothing to paste")
+            return
+        }
+
+        let domain = extractDomain(from: raw)
+
+        guard !domain.isEmpty, isValidDomain(domain) else {
+            showPasteError("No valid domain found")
+            return
+        }
+
+        guard !customDomains.contains(domain) else {
+            showPasteError("Domain already added")
+            return
+        }
+
+        withAnimation(Design.Animation.springQuick) {
+            customDomains.append(domain)
+        }
+    }
+
+    private func extractDomain(from raw: String) -> String {
+        let firstLine = raw.components(separatedBy: .newlines).first ?? raw
+        var trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        // Strip protocol and extract host if it's a URL
+        if trimmed.contains("://") {
+            if let url = URL(string: trimmed), let host = url.host {
+                trimmed = host
+            } else {
+                // Manual strip if URL parsing fails
+                if let range = trimmed.range(of: "://") {
+                    trimmed = String(trimmed[range.upperBound...])
+                }
+                // Remove path
+                if let slashIndex = trimmed.firstIndex(of: "/") {
+                    trimmed = String(trimmed[..<slashIndex])
+                }
+            }
+        }
+
+        // Strip www. prefix
+        if trimmed.hasPrefix("www.") {
+            trimmed = String(trimmed.dropFirst(4))
+        }
+
+        // Strip trailing dot
+        while trimmed.hasSuffix(".") {
+            trimmed = String(trimmed.dropLast())
+        }
+
+        return trimmed
+    }
+
+    private func isValidDomain(_ domain: String) -> Bool {
+        guard !domain.isEmpty, domain.contains("."), !domain.contains(" ") else {
+            return false
+        }
+        // Reject IP addresses
+        let parts = domain.split(separator: ".")
+        let allNumeric = parts.allSatisfy { $0.allSatisfy(\.isNumber) }
+        if allNumeric { return false }
+
+        // Basic domain character validation
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-."))
+        return domain.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private func showPasteError(_ message: String) {
+        withAnimation(Design.Animation.springQuick) {
+            pasteErrorMessage = message
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation(Design.Animation.springQuick) {
+                pasteErrorMessage = nil
+            }
+        }
+    }
+    #endif
 }
 
 // MARK: - Pulse Animation Modifier

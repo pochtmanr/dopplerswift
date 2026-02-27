@@ -20,9 +20,6 @@ struct HomeView: View {
     @State private var serverIPGeo: IPGeolocation?
     @State private var speedTestResult: SpeedTestResult?
     @State private var speedTestRunning = false
-    @State private var traceHops: [TraceHop] = []
-    @State private var isTracing = false
-    @State private var traceError: String?
 
     private var isConnected: Bool {
         vpnManager.status == .connected
@@ -83,9 +80,8 @@ struct HomeView: View {
         }
         .onChange(of: vpnManager.status) { _, newValue in
             handleStatusChange(newValue)
-            // Only refresh user geo on disconnect — when connected, the public IP
-            // is the VPN server's IP, which would move "You" to the server location.
-            if newValue == .disconnected {
+            // Refresh user geo on connect (shows VPN exit location) and disconnect (shows real location)
+            if newValue == .connected || newValue == .disconnected {
                 Task { await fetchUserGeo(force: true) }
             }
         }
@@ -423,27 +419,21 @@ struct HomeView: View {
         let active = smartRoutingEnabled && isConnected && smartRoutingCountry != nil
 
         VStack(spacing: Design.Spacing.sm) {
-            // Row 1: Smart Route card + Lite Trace card
+            // Row 1: Smart Route + Map side by side (1:1 each)
             HStack(spacing: Design.Spacing.sm) {
                 smartRouteCard(active: active)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .aspectRatio(1.0, contentMode: .fit)
 
-                traceRouteCard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                MapCardView(
+                    userGeo: userIPGeo,
+                    serverGeo: serverIPGeo,
+                    isConnected: isConnected,
+                    isExpanded: false
+                )
+                .aspectRatio(1.0, contentMode: .fit)
             }
-            .frame(height: 120)
 
-            // Row 2: Map (full width, 2:1 aspect)
-            MapCardView(
-                userGeo: userIPGeo,
-                serverGeo: serverIPGeo,
-                isConnected: isConnected,
-                isExpanded: false,
-                hops: traceHops
-            )
-            .aspectRatio(2.0, contentMode: .fit)
-
-            // Row 3: Speed Test (full width)
+            // Row 2: Speed Test (full width)
             SpeedTestWidget(
                 compact: false,
                 result: $speedTestResult,
@@ -457,28 +447,25 @@ struct HomeView: View {
 
     @ViewBuilder
     private func smartRouteCard(active: Bool) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Design.Spacing.md) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textTertiary)
-                    .frame(width: 28)
+        VStack(spacing: Design.Spacing.sm) {
+            Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Smart Route")
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(Design.Colors.textPrimary)
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textTertiary)
 
-                    Text(active ? "Active" : smartRoutingEnabled ? "VPN Off" : "Off")
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textSecondary)
-                }
+            VStack(spacing: 2) {
+                Text("Smart Route")
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .foregroundStyle(Design.Colors.textPrimary)
 
-                Spacer(minLength: 0)
+                Text(active ? "Active" : smartRoutingEnabled ? "VPN Off" : "Off")
+                    .font(.system(.caption, design: .rounded, weight: .medium))
+                    .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textSecondary)
             }
             .onTapGesture { onSmartRouteTap?() }
 
-            Spacer(minLength: Design.Spacing.sm)
+            Spacer(minLength: 0)
 
             Button {
                 smartRoutingEnabled.toggle()
@@ -499,129 +486,12 @@ struct HomeView: View {
             }
             .buttonStyle(ConnectButtonStyle())
         }
+        .multilineTextAlignment(.center)
         .padding(Design.Spacing.md)
         .glassEffect(
             active ? .regular.tint(.green.opacity(0.15)) : .regular,
             in: .rect(cornerRadius: Design.CornerRadius.lg)
         )
-    }
-
-    // MARK: - Trace Route Card
-
-    @ViewBuilder
-    private var traceRouteCard: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Design.Spacing.md) {
-                if isTracing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.orange)
-                        .frame(width: 28)
-                } else {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(traceHops.isEmpty ? Design.Colors.textTertiary : .orange)
-                        .frame(width: 28)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Lite Trace")
-                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                        .foregroundStyle(Design.Colors.textPrimary)
-
-                    Text(traceStatusText)
-                        .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(isTracing ? .orange : Design.Colors.textSecondary)
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            Spacer(minLength: Design.Spacing.sm)
-
-            Button {
-                Task { await runTraceroute() }
-            } label: {
-                Text(isTracing ? "Tracing..." : "Run")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(isConnected && !isTracing ? .white : Design.Colors.textTertiary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Design.Spacing.sm)
-                    .background(
-                        isConnected && !isTracing ? Design.Colors.accent : Color.clear,
-                        in: Capsule()
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(isConnected && !isTracing ? Color.clear : Design.Colors.textTertiary.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(ConnectButtonStyle())
-            .disabled(!isConnected || isTracing)
-        }
-        .padding(Design.Spacing.md)
-        .glassEffect(
-            isTracing ? .regular.tint(.orange.opacity(0.1)) : .regular,
-            in: .rect(cornerRadius: Design.CornerRadius.lg)
-        )
-    }
-
-    private var traceStatusText: String {
-        if isTracing { return "Tracing..." }
-        if let error = traceError { return error }
-        if traceHops.isEmpty { return isConnected ? "Tap to trace" : "VPN Off" }
-        let located = traceHops.filter(\.isGeolocated).count
-        return "\(traceHops.count) hops (\(located) mapped)"
-    }
-
-    private func runTraceroute() async {
-        guard let server = selectedServer else {
-            NSLog("[HomeView] runTraceroute: no selectedServer")
-            return
-        }
-        guard !isTracing else { return }
-
-        isTracing = true
-        traceError = nil
-        traceHops = []
-
-        NSLog("[HomeView] runTraceroute: tracing to %@", server.vlessConfig.address)
-        let service = TracerouteService()
-
-        do {
-            // Fetch all hops from server-side MTR
-            var hops = try await service.trace(host: server.vlessConfig.address)
-            NSLog("[HomeView] runTraceroute: received %d hops", hops.count)
-
-            withAnimation(.easeInOut(duration: 0.2)) {
-                traceHops = hops
-            }
-
-            // Batch-geolocate all hop IPs
-            let ips = hops.compactMap(\.ip)
-            if !ips.isEmpty {
-                let locations = try await HopGeolocator.geolocate(ips: ips)
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    for i in hops.indices {
-                        if let ip = hops[i].ip, let loc = locations[ip] {
-                            hops[i].coordinate = loc.coordinate
-                            hops[i].city = loc.city
-                            hops[i].countryCode = loc.countryCode
-                        }
-                    }
-                    traceHops = hops
-                }
-            }
-
-            if hops.isEmpty {
-                traceError = "No hops found"
-            }
-        } catch {
-            NSLog("[HomeView] Traceroute failed: %@", error.localizedDescription)
-            traceError = error.localizedDescription
-        }
-
-        isTracing = false
     }
 
     // MARK: - Button Properties
