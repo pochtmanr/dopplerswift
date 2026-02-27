@@ -30,6 +30,8 @@ Pods/
 .env
 .env.*
 *.pem
+Secrets.xcconfig
+**/Secrets.xcconfig
 
 # Large binary frameworks (use Git LFS or local only)
 Frameworks/
