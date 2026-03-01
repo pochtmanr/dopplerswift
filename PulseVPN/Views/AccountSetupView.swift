@@ -1,4 +1,5 @@
 import SwiftUI
+import RevenueCat
 
 // MARK: - Account Mode
 
@@ -12,6 +13,8 @@ enum AccountMode: Equatable {
 
 struct AccountSetupView: View {
     let accountManager: AccountManager
+    let rcService: RevenueCatService
+    let syncService: SubscriptionSyncService
 
     // MARK: - State
 
@@ -20,6 +23,10 @@ struct AccountSetupView: View {
     @State private var loginInput: String = ""
     @State private var copied = false
     @State private var showShareSheet = false
+
+    /// Detected owner account ID if this Apple ID has an existing subscription
+    @State private var detectedOwnerAccountId: String?
+    @State private var isCheckingSubscription = false
 
     private var isLoginValid: Bool {
         AccountInputFormatter.isValid(loginInput)
@@ -42,6 +49,22 @@ struct AccountSetupView: View {
         }
         .animation(Design.Animation.springDefault, value: mode)
         .animation(Design.Animation.springDefault, value: generatedAccountId)
+        .animation(Design.Animation.springDefault, value: detectedOwnerAccountId)
+        .onAppear {
+            // If redirected from a subscription ownership conflict,
+            // pre-fill the original account ID and jump to login mode.
+            if let prefill = accountManager.consumePrefillAccountId() {
+                loginInput = prefill
+                mode = .login
+            }
+
+            // Re-check for existing subscription every time this view appears
+            // (handles: first visit, returning after logout from new account, etc.)
+            detectedOwnerAccountId = nil
+            Task {
+                await checkExistingSubscription()
+            }
+        }
     }
 
     // MARK: - Background
@@ -54,7 +77,7 @@ struct AccountSetupView: View {
 
             RadialGradient(
                 colors: [
-                    Design.Colors.accent.opacity(0.05),
+                    Design.Colors.teal.opacity(0.05),
                     Color.clear
                 ],
                 center: .top,
@@ -97,6 +120,20 @@ struct AccountSetupView: View {
     private var choiceContent: some View {
         VStack(spacing: Design.Spacing.lg) {
             choiceHeader
+
+            // Show detected subscription banner if this Apple ID has an active sub
+            if let ownerId = detectedOwnerAccountId {
+                existingSubscriptionBanner(ownerId: ownerId)
+            } else if isCheckingSubscription {
+                HStack(spacing: Design.Spacing.sm) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking for existing subscription...")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Design.Colors.textSecondary)
+                }
+                .padding(.vertical, Design.Spacing.sm)
+            }
+
             choiceCards
             deviceInfoPill
         }
@@ -121,7 +158,7 @@ struct AccountSetupView: View {
         VStack(spacing: Design.Spacing.md) {
             choiceCard(
                 icon: "key.fill",
-                iconColor: Design.Colors.accent,
+                iconColor: Design.Colors.teal,
                 title: "Create Account",
                 description: "Get a unique ID to use across all your devices"
             ) {
@@ -147,8 +184,8 @@ struct AccountSetupView: View {
     private func choiceCard(
         icon: String,
         iconColor: Color,
-        title: String,
-        description: String,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -178,7 +215,7 @@ struct AccountSetupView: View {
                     .strokeBorder(Design.Colors.separator.opacity(0.3), lineWidth: 1)
             )
         }
-        .buttonStyle(ScaleCardButtonStyle())
+        .buttonStyle(ScalePressStyle())
         .accessibilityLabel(title)
         .accessibilityHint(description)
     }
@@ -287,15 +324,15 @@ struct AccountSetupView: View {
             .padding(.vertical, Design.Spacing.md)
             .background(
                 LinearGradient(
-                    colors: [Design.Colors.accent, Design.Colors.accentDark],
+                    colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
                 in: Capsule()
             )
-            .shadow(color: Design.Colors.accent.opacity(0.3), radius: 12, y: 6)
+            .shadow(color: Design.Colors.teal.opacity(0.3), radius: 12, y: 6)
         }
-        .buttonStyle(ScaleCardButtonStyle())
+        .buttonStyle(ScalePressStyle())
         .disabled(accountManager.isLoading)
         .opacity(accountManager.isLoading ? 0.7 : 1.0)
         .accessibilityLabel("Generate My Account ID")
@@ -339,7 +376,7 @@ struct AccountSetupView: View {
     private var accountIdDisplayCard: some View {
         Text(generatedAccountId ?? "")
             .font(.system(.title2, design: .monospaced, weight: .bold))
-            .foregroundStyle(Design.Colors.accent)
+            .foregroundStyle(Design.Colors.teal)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Design.Spacing.xl)
             .padding(.horizontal, Design.Spacing.md)
@@ -374,7 +411,7 @@ struct AccountSetupView: View {
                     .textCase(.uppercase)
                     .tracking(0.8)
             }
-            .foregroundStyle(copied ? .green : Design.Colors.accent)
+            .foregroundStyle(copied ? .green : Design.Colors.teal)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Design.Spacing.sm + 4)
             .background(
@@ -402,7 +439,7 @@ struct AccountSetupView: View {
                         .textCase(.uppercase)
                         .tracking(0.8)
                 }
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Design.Spacing.sm + 4)
                 .background(Design.Colors.surfaceCardHover, in: RoundedRectangle(cornerRadius: Design.CornerRadius.md))
@@ -443,15 +480,15 @@ struct AccountSetupView: View {
                 .padding(.vertical, Design.Spacing.md)
                 .background(
                     LinearGradient(
-                        colors: [Design.Colors.accent, Design.Colors.accentDark],
+                        colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                         startPoint: .leading,
                         endPoint: .trailing
                     ),
                     in: Capsule()
                 )
-                .shadow(color: Design.Colors.accent.opacity(0.3), radius: 12, y: 6)
+                .shadow(color: Design.Colors.teal.opacity(0.3), radius: 12, y: 6)
         }
-        .buttonStyle(ScaleCardButtonStyle())
+        .buttonStyle(ScalePressStyle())
         .accessibilityLabel("Continue to app")
     }
 
@@ -508,9 +545,9 @@ struct AccountSetupView: View {
                 } label: {
                     Image(systemName: "doc.on.clipboard")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                         .frame(width: 36, height: 36)
-                        .background(Design.Colors.accent.opacity(0.1), in: Circle())
+                        .background(Design.Colors.teal.opacity(0.1), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Paste from clipboard")
@@ -529,7 +566,7 @@ struct AccountSetupView: View {
             RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
                 .strokeBorder(
                     isLoginValid
-                        ? Design.Colors.accent.opacity(0.4)
+                        ? Design.Colors.teal.opacity(0.4)
                         : Design.Colors.separator.opacity(0.3),
                     lineWidth: 1
                 )
@@ -565,15 +602,15 @@ struct AccountSetupView: View {
             .padding(.vertical, Design.Spacing.md)
             .background(
                 LinearGradient(
-                    colors: [Design.Colors.accent, Design.Colors.accentDark],
+                    colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
                 in: Capsule()
             )
-            .shadow(color: Design.Colors.accent.opacity(isLoginValid ? 0.3 : 0.0), radius: 12, y: 6)
+            .shadow(color: Design.Colors.teal.opacity(isLoginValid ? 0.3 : 0.0), radius: 12, y: 6)
         }
-        .buttonStyle(ScaleCardButtonStyle())
+        .buttonStyle(ScalePressStyle())
         .disabled(!isLoginValid || accountManager.isLoading)
         .opacity(isLoginValid ? 1.0 : 0.5)
         .accessibilityLabel("Login with account ID")
@@ -683,25 +720,134 @@ struct AccountSetupView: View {
             }
         }
     }
-}
 
-// MARK: - Scale Card Button Style
+    // MARK: - Existing Subscription Detection
 
-private struct ScaleCardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(Design.Animation.springQuick, value: configuration.isPressed)
+    /// Checks RC for an active subscription on this Apple ID,
+    /// then queries Supabase to find which account owns it.
+    private func checkExistingSubscription() async {
+        guard rcService.isConfigured else { return }
+
+        isCheckingSubscription = true
+        defer { isCheckingSubscription = false }
+
+        // Fetch current customer info from RC (anonymous or cached identity)
+        do {
+            let info = try await Purchases.shared.customerInfo()
+
+            // Check if there's an active entitlement
+            let entitlements = info.entitlements.active
+            let entitlement = entitlements[RCEntitlements.premium] ?? entitlements[RCEntitlements.pro]
+            guard let entitlement else { return }
+
+            // Build the transaction ID to look up the owner
+            let productId = entitlement.productIdentifier
+            let dateString: String
+            if let originalDate = entitlement.originalPurchaseDate {
+                dateString = ISO8601DateFormatter().string(from: originalDate)
+            } else {
+                dateString = "unknown"
+            }
+            let originalTransactionId = "\(productId)_\(dateString)"
+
+            // Ask Supabase who owns this transaction
+            // We pass a dummy account ID — verify_restore will tell us the owner
+            let verification = await syncService.verifyRestore(
+                accountId: "CHECK_ONLY",
+                originalTransactionId: originalTransactionId
+            )
+
+            switch verification {
+            case .rejected(let owner):
+                withAnimation(Design.Animation.springDefault) {
+                    detectedOwnerAccountId = owner
+                }
+            case .allowed, .error:
+                // No existing owner, or check failed — proceed normally
+                break
+            }
+        } catch {
+            NSLog("[AccountSetupView] Failed to check existing subscription: %@", error.localizedDescription)
+        }
+    }
+
+    // MARK: - Existing Subscription Banner
+
+    @ViewBuilder
+    private func existingSubscriptionBanner(ownerId: String) -> some View {
+        VStack(spacing: Design.Spacing.md) {
+            HStack(spacing: Design.Spacing.md) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(Design.Colors.teal)
+                    .frame(width: 44, height: 44)
+                    .background(Design.Colors.teal.opacity(0.12), in: RoundedRectangle(cornerRadius: Design.CornerRadius.md))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pro Subscription Found")
+                        .font(.system(.body, design: .rounded, weight: .semibold))
+                        .foregroundStyle(Design.Colors.textPrimary)
+
+                    Text("Your Apple ID has an active subscription linked to:")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Design.Colors.textSecondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Account ID display
+            Text(ownerId)
+                .font(.system(.body, design: .monospaced, weight: .bold))
+                .foregroundStyle(Design.Colors.teal)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Design.Spacing.md)
+                .background(Design.Colors.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: Design.CornerRadius.md))
+
+            // Login CTA
+            Button {
+                withAnimation(Design.Animation.springDefault) {
+                    loginInput = ownerId
+                    mode = .login
+                }
+            } label: {
+                HStack(spacing: Design.Spacing.sm) {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Log In to \(ownerId)")
+                        .font(.system(.subheadline, design: .rounded, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    LinearGradient(
+                        colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    in: Capsule()
+                )
+                .shadow(color: Design.Colors.teal.opacity(0.3), radius: 8, y: 4)
+            }
+            .buttonStyle(ScalePressStyle())
+        }
+        .padding(Design.Spacing.md)
+        .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
+                .strokeBorder(Design.Colors.teal.opacity(0.3), lineWidth: 1)
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 }
 
 // MARK: - Previews
 
 #Preview("Choice") {
-    AccountSetupView(accountManager: AccountManager())
+    AccountSetupView(accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService())
 }
 
 #Preview("Choice Dark") {
-    AccountSetupView(accountManager: AccountManager())
+    AccountSetupView(accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService())
         .preferredColorScheme(.dark)
 }

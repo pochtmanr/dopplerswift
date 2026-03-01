@@ -9,11 +9,11 @@ enum ConnectionStatus: String, Codable, Sendable {
 
     var displayText: String {
         switch self {
-        case .disconnected: "Disconnected"
-        case .connecting: "Connecting..."
-        case .connected: "Connected"
-        case .disconnecting: "Disconnecting..."
-        case .failed: "Connection Failed"
+        case .disconnected: String(localized: "Disconnected")
+        case .connecting: String(localized: "Connecting...")
+        case .connected: String(localized: "Connected")
+        case .disconnecting: String(localized: "Disconnecting...")
+        case .failed: String(localized: "Connection Failed")
         }
     }
 

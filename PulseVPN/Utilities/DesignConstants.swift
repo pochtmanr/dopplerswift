@@ -41,13 +41,15 @@ enum Design {
     // MARK: - Colors
 
     enum Colors {
-        static let connected = Color.green
+        static let connected = teal
         static let connecting = Color.orange
         static let disconnected = Color(red: 0.45, green: 0.55, blue: 0.7)
         static let failed = Color.red
 
         static let accent = Color(red: 0.25, green: 0.55, blue: 1.0)
         static let accentDark = Color(red: 0.15, green: 0.35, blue: 0.8)
+
+        static let teal = Color(red: 0.0, green: 0.55, blue: 0.55)
 
         #if os(iOS)
         static let surfaceBackground = Color(uiColor: .systemBackground)

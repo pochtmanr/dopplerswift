@@ -3,7 +3,8 @@ import CoreLocation
 
 // MARK: - IP Geolocation
 
-/// Lightweight model mapping to the `ipapi.co/json/` response.
+/// Lightweight model for IP geolocation data.
+/// Supports decoding from ipwho.is JSON responses.
 struct IPGeolocation: Codable, Sendable {
     let ip: String
     let city: String?

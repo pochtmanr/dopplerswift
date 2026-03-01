@@ -206,7 +206,7 @@ struct ServerListView: View {
                 .font(.caption)
         } else if isSelected {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
                 .font(.body)
                 .transition(.scale.combined(with: .opacity))
         }
@@ -226,7 +226,7 @@ struct ServerListView: View {
             HStack(spacing: Design.Spacing.md) {
                 Image(systemName: "globe")
                     .font(.title3)
-                    .foregroundStyle(Design.Colors.accent)
+                    .foregroundStyle(Design.Colors.teal)
                     .frame(width: Design.Size.flagSize)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -249,7 +249,7 @@ struct ServerListView: View {
 
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                         .font(.body)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -267,7 +267,7 @@ struct ServerListView: View {
     private var loadingRow: some View {
         HStack(spacing: Design.Spacing.md) {
             ProgressView()
-                .tint(Design.Colors.accent)
+                .tint(Design.Colors.teal)
 
             Text("Loading servers...")
                 .font(.system(.body, design: .rounded))
@@ -300,7 +300,7 @@ struct ServerListView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .font(.body)
-                    .foregroundStyle(Design.Colors.accent)
+                    .foregroundStyle(Design.Colors.teal)
             }
             .buttonStyle(.plain)
         }
@@ -319,12 +319,17 @@ struct ServerListView: View {
 
     @ViewBuilder
     private func securityBadge(_ security: String) -> some View {
-        Text(security.uppercased())
+        let label: String = switch security.lowercased() {
+        case "reality", "tls": "ENCRYPTED"
+        case "none": "OPEN"
+        default: "SECURE"
+        }
+        Text(label)
             .font(.system(.caption2, design: .monospaced, weight: .medium))
-            .foregroundStyle(Design.Colors.accent)
+            .foregroundStyle(Design.Colors.teal)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Design.Colors.accent.opacity(0.12), in: Capsule())
+            .background(Design.Colors.teal.opacity(0.12), in: Capsule())
     }
 
     @ViewBuilder
@@ -403,13 +408,13 @@ struct ServerListView: View {
     let cloudServers: [SupabaseServer] = [
         SupabaseServer(
             id: UUID(), name: "Russia 1", country: "Russia",
-            countryCode: "RU", city: "Moscow", ipAddress: "45.10.43.204",
+            countryCode: "RU", city: "Moscow", ipAddress: "192.0.2.1",
             port: 51820, protocol: "wireguard", configData: nil, loadPercentage: 15,
             isPremium: false, latencyMs: 30, isActive: true, speedMbps: 1000
         ),
         SupabaseServer(
             id: UUID(), name: "UK (London)", country: "United Kingdom",
-            countryCode: "GB", city: "London", ipAddress: "82.26.193.110",
+            countryCode: "GB", city: "London", ipAddress: "198.51.100.1",
             port: 1194, protocol: "udp", configData: nil, loadPercentage: 45,
             isPremium: true, latencyMs: 55, isActive: true, speedMbps: nil
         ),

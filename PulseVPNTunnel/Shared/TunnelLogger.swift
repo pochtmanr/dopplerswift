@@ -4,7 +4,7 @@ import Foundation
 /// Both the tunnel extension and the main app can read this file.
 enum TunnelLogger {
 
-    private static let appGroupID = "group.com.pulsingroutes.vpn"
+    private static let appGroupID = "group.com.simnetiq.vpnreact"
     private static let fileName = "tunnel_debug.log"
     private static let maxFileSize = 100_000 // ~100KB, auto-truncate
 

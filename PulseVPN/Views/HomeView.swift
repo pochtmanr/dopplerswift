@@ -54,16 +54,16 @@ struct HomeView: View {
                         .frame(height: Design.Spacing.md)
 
                     serverInfoCard
-                        .padding(.horizontal, Design.Spacing.lg)
+                        .padding(.horizontal, Design.Spacing.md)
 
                     mapAndWidgetSection
-                        .padding(.horizontal, Design.Spacing.lg)
+                        .padding(.horizontal, Design.Spacing.md)
                         .padding(.top, Design.Spacing.sm)
                         .padding(.bottom, Design.Spacing.md)
 
                     if let errorMessage = vpnManager.errorMessage {
                         errorBanner(errorMessage)
-                            .padding(.horizontal, Design.Spacing.lg)
+                            .padding(.horizontal, Design.Spacing.md)
                             .padding(.bottom, Design.Spacing.md)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -157,12 +157,11 @@ struct HomeView: View {
                 latencyBadge(latency)
             }
 
-            Image(systemName: "arrow.right")
+            Image(systemName: "chevron.forward")
                 .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.white)
-                .rotationEffect(.degrees(-45))
                 .frame(width: 28, height: 28)
-                .background(Design.Colors.accent, in: Circle())
+                .background(Design.Colors.teal, in: Circle())
         }
     }
 
@@ -175,7 +174,7 @@ struct HomeView: View {
                 if server.flagEmoji.isEmpty {
                     Image(systemName: "globe")
                         .font(.title2)
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                 }
             }
     }
@@ -194,12 +193,11 @@ struct HomeView: View {
 
             Spacer()
 
-            Image(systemName: "arrow.right")
+            Image(systemName: "chevron.forward")
                 .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.white)
-                .rotationEffect(.degrees(-45))
                 .frame(width: 28, height: 28)
-                .background(Design.Colors.accent, in: Circle())
+                .background(Design.Colors.teal, in: Circle())
         }
     }
 
@@ -230,10 +228,9 @@ struct HomeView: View {
                         .shadow(color: statusColor.opacity(0.2), radius: 16, y: 6)
                 }
                 .buttonStyle(ConnectButtonStyle())
-                .disabled(!canInteract)
-                .opacity(selectedServer == nil ? 0.5 : 1.0)
-                .accessibilityLabel(buttonAccessibilityLabel)
-                .accessibilityHint(selectedServer == nil ? "Select a server first" : "")
+                .disabled(isProcessing || isTransitioning)
+                .accessibilityLabel(selectedServer == nil ? "Select a server" : buttonAccessibilityLabel)
+                .accessibilityHint(selectedServer == nil ? "Double tap to choose a server" : "")
                 #if os(iOS)
                 .sensoryFeedback(.impact(weight: .medium), trigger: vpnManager.status)
                 #endif
@@ -452,7 +449,7 @@ struct HomeView: View {
 
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textTertiary)
+                .foregroundStyle(smartRoutingEnabled ? Design.Colors.teal : Design.Colors.textTertiary)
 
             VStack(spacing: 2) {
                 Text("Smart Route")
@@ -461,7 +458,7 @@ struct HomeView: View {
 
                 Text(active ? "Active" : smartRoutingEnabled ? "VPN Off" : "Off")
                     .font(.system(.caption, design: .rounded, weight: .medium))
-                    .foregroundStyle(active ? Design.Colors.connected : Design.Colors.textSecondary)
+                    .foregroundStyle(active ? Design.Colors.teal : Design.Colors.textSecondary)
             }
             .onTapGesture { onSmartRouteTap?() }
 
@@ -470,26 +467,31 @@ struct HomeView: View {
             Button {
                 smartRoutingEnabled.toggle()
             } label: {
-                Text(smartRoutingEnabled ? "Turn Off" : "Turn On")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(smartRoutingEnabled ? Design.Colors.textPrimary : .white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Design.Spacing.sm)
-                    .background(
-                        smartRoutingEnabled ? Color.clear : Design.Colors.accent,
-                        in: Capsule()
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(smartRoutingEnabled ? Design.Colors.textTertiary.opacity(0.3) : Color.clear, lineWidth: 1)
-                    )
+                HStack(spacing: 4) {
+                    Image(systemName: smartRoutingEnabled ? "xmark" : "power")
+                        .font(.system(size: 10, weight: .bold))
+
+                    Text(smartRoutingEnabled ? "Turn Off" : "Turn On")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                }
+                .foregroundStyle(smartRoutingEnabled ? Design.Colors.textPrimary : .white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Design.Spacing.sm)
+                .background(
+                    smartRoutingEnabled ? Color.clear : Design.Colors.teal,
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(smartRoutingEnabled ? Design.Colors.textTertiary.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
             }
             .buttonStyle(ConnectButtonStyle())
         }
         .multilineTextAlignment(.center)
         .padding(Design.Spacing.md)
         .glassEffect(
-            active ? .regular.tint(.green.opacity(0.15)) : .regular,
+            active ? .regular.tint(Design.Colors.teal.opacity(0.15)) : .regular,
             in: .rect(cornerRadius: Design.CornerRadius.lg)
         )
     }
@@ -503,9 +505,9 @@ struct HomeView: View {
         case .connecting, .disconnecting:
             return [Color.orange.opacity(0.7), Color.orange.opacity(0.5)]
         case .disconnected:
-            return [Design.Colors.accent, Design.Colors.accentDark]
+            return [Design.Colors.teal, Design.Colors.teal.opacity(0.7)]
         case .failed:
-            return [Design.Colors.accent, Design.Colors.accentDark]
+            return [Design.Colors.teal, Design.Colors.teal.opacity(0.7)]
         }
     }
 
@@ -520,17 +522,24 @@ struct HomeView: View {
 
     private var buttonAccessibilityLabel: String {
         switch vpnManager.status {
-        case .connected: "Disconnect from VPN"
-        case .connecting: "Connecting to VPN"
-        case .disconnecting: "Disconnecting from VPN"
-        case .disconnected: "Connect to VPN"
-        case .failed: "Retry VPN connection"
+        case .connected: String(localized: "Disconnect from VPN")
+        case .connecting: String(localized: "Connecting to VPN")
+        case .disconnecting: String(localized: "Disconnecting from VPN")
+        case .disconnected: String(localized: "Connect to VPN")
+        case .failed: String(localized: "Retry VPN connection")
         }
     }
 
     // MARK: - Actions
 
     private func handleButtonTap() {
+        if selectedServer == nil {
+            onServerTap?()
+            return
+        }
+        // Extra guard: if already processing or transitioning, ignore tap
+        guard !isProcessing, !isTransitioning else { return }
+
         if isConnected {
             handleDisconnect()
         } else {
@@ -539,14 +548,15 @@ struct HomeView: View {
     }
 
     private func handleConnect() {
+        guard !isProcessing else { return }
         guard let server = selectedServer else {
             NSLog("[HomeView] handleConnect: selectedServer is nil! Cannot connect.")
-            vpnManager.errorMessage = "No server selected. Please select a server."
+            vpnManager.errorMessage = String(localized: "No server selected. Please select a server.")
             return
         }
+        isProcessing = true
         NSLog("[HomeView] handleConnect: server=%@, address=%@", server.displayName, server.vlessConfig.address)
         Task {
-            isProcessing = true
             defer { isProcessing = false }
             do {
                 try await onConnectAndConvert(server.vlessConfig)
@@ -558,9 +568,12 @@ struct HomeView: View {
     }
 
     private func handleDisconnect() {
+        guard !isProcessing else { return }
         isProcessing = true
-        vpnManager.disconnect()
-        isProcessing = false
+        Task {
+            defer { isProcessing = false }
+            await vpnManager.disconnect()
+        }
     }
 
     // MARK: - Geolocation

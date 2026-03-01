@@ -12,6 +12,8 @@ struct Account: Codable, Sendable {
     let maxDevices: Int
     let createdAt: Date
     let updatedAt: Date?
+    let contactMethod: String?
+    let contactValue: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -20,10 +22,75 @@ struct Account: Codable, Sendable {
         case maxDevices = "max_devices"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case contactMethod = "contact_method"
+        case contactValue = "contact_value"
     }
 
     var isPro: Bool { subscriptionTier == "pro" || subscriptionTier == "premium" }
     var isPremium: Bool { subscriptionTier == "premium" }
+    var hasLinkedContact: Bool { contactMethod != nil && contactValue != nil }
+}
+
+// MARK: - Contact Method
+
+enum ContactMethod: String, CaseIterable, Identifiable {
+    case telegram
+    case whatsapp
+    case email
+
+    var id: String { rawValue }
+
+    var label: LocalizedStringResource {
+        switch self {
+        case .telegram: "Telegram"
+        case .whatsapp: "WhatsApp"
+        case .email: "Email"
+        }
+    }
+
+    var localizedLabel: String {
+        String(localized: label)
+    }
+
+    var icon: String {
+        switch self {
+        case .telegram: "paperplane.fill"
+        case .whatsapp: "phone.fill"
+        case .email: "envelope.fill"
+        }
+    }
+
+    var placeholder: LocalizedStringResource {
+        switch self {
+        case .telegram: "@username"
+        case .whatsapp: "+1234567890"
+        case .email: "you@example.com"
+        }
+    }
+
+    #if os(iOS)
+    var keyboardType: UIKeyboardType {
+        switch self {
+        case .telegram: .default
+        case .whatsapp: .phonePad
+        case .email: .emailAddress
+        }
+    }
+    #endif
+
+    func validate(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        switch self {
+        case .telegram:
+            return trimmed.count >= 2
+        case .whatsapp:
+            let digits = trimmed.filter(\.isNumber)
+            return digits.count >= 7
+        case .email:
+            return trimmed.contains("@") && trimmed.contains(".")
+        }
+    }
 }
 
 // MARK: - Errors
@@ -66,6 +133,7 @@ final class AccountManager {
 
     private(set) var account: Account?
     private(set) var isLoading = false
+    private(set) var isInitializing = true
     var errorMessage: String?
 
     var isAuthenticated: Bool { account != nil }
@@ -77,15 +145,32 @@ final class AccountManager {
     // MARK: - Private Properties
 
     private enum Keys {
-        static let accountId = "pulse_route_account_id"
-        static let onboardingComplete = "pulse_route_onboarding_complete"
-        static let macDeviceId = "pulse_route_device_id"
+        static let accountId = "doppler_account_id"
+        static let onboardingComplete = "doppler_onboarding_complete"
+        static let macDeviceId = "doppler_device_id"
+        static let prefillAccountId = "doppler_prefill_account_id"
+    }
+
+    /// Account ID to pre-fill on the login screen after a subscription ownership redirect.
+    /// Consumed once by AccountSetupView, then cleared.
+    var prefillAccountId: String? {
+        get { UserDefaults.standard.string(forKey: Keys.prefillAccountId) }
+        set { UserDefaults.standard.set(newValue, forKey: Keys.prefillAccountId) }
+    }
+
+    /// Clears the prefill key (call after reading it in AccountSetupView).
+    func consumePrefillAccountId() -> String? {
+        guard let id = prefillAccountId else { return nil }
+        prefillAccountId = nil
+        return id
     }
 
     // MARK: - Public Methods
 
     /// Called on app launch to restore a previously authenticated session.
     func initialize() async {
+        defer { isInitializing = false }
+
         guard let storedAccountId = UserDefaults.standard.string(forKey: Keys.accountId) else {
             return
         }
@@ -167,11 +252,46 @@ final class AccountManager {
         logout()
     }
 
-    /// Clears all local auth state.
+    /// Links a contact method to the account for recovery purposes.
+    func linkContact(method: ContactMethod, value: String) async throws {
+        guard let account else {
+            throw AccountError.accountNotFound
+        }
+
+        let body: [String: String] = [
+            "p_account_id": account.accountId,
+            "p_contact_method": method.rawValue,
+            "p_contact_value": value.trimmingCharacters(in: .whitespacesAndNewlines)
+        ]
+
+        let data = try await supabaseRPC(function: "link_contact", body: body)
+
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           json["success"] as? Bool != true {
+            let errorMsg = json["error"] as? String ?? "Failed to link contact"
+            throw AccountError.networkError(errorMsg)
+        }
+
+        // Re-fetch account to get updated contact info
+        let refreshed = try await registerDevice(accountId: account.accountId)
+        self.account = refreshed
+    }
+
+    /// Clears all local auth state and resets onboarding.
     func logout() {
         account = nil
         errorMessage = nil
         isOnboardingComplete = false
+        UserDefaults.standard.removeObject(forKey: Keys.accountId)
+    }
+
+    /// Clears local auth state but keeps onboarding complete.
+    /// Use when switching accounts (e.g. from subscription conflict dialog)
+    /// so the user goes straight to the login screen instead of Welcome.
+    func switchAccount() {
+        account = nil
+        errorMessage = nil
+        // Keep isOnboardingComplete = true to skip WelcomeView
         UserDefaults.standard.removeObject(forKey: Keys.accountId)
     }
 

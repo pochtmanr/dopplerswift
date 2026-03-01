@@ -15,21 +15,21 @@ struct WelcomeView: View {
 
     // MARK: - Constants
 
-    private let phrases = [
+    private let phrases: [LocalizedStringKey] = [
         "to privacy.",
         "to be let alone.",
         "to digital safety.",
         "to be forgotten.",
         "to say no.",
         "to silence.",
-        "to be unseen.",
+        "to choose who sees them.",
         "to be respected.",
-        "to digital sovereignty.",
-        "to hold their own keys.",
-        "to anonymity.",
+        "to digital freedom.",
+        "to own their online experience.",
+        "to privacy online.",
         "to be shielded.",
         "to peace of mind.",
-        "to keep secrets.",
+        "to control their data.",
         "to own their data.",
         "to be protected.",
         "to encrypt."
@@ -80,29 +80,19 @@ struct WelcomeView: View {
                     .clipped()
                     .opacity(0.45)
 
-                // Light gradient at top and bottom for text readability
+                // Bottom gradient for text readability
                 VStack(spacing: 0) {
-                    LinearGradient(
-                        colors: [
-                            Design.Colors.surfaceBackground.opacity(0.7),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: geo.size.height * 0.3)
-
                     Spacer()
 
                     LinearGradient(
                         colors: [
                             Color.clear,
-                            Design.Colors.surfaceBackground.opacity(0.6)
+                            Design.Colors.surfaceBackground
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: geo.size.height * 0.35)
+                    .frame(height: geo.size.height * 0.45)
                 }
             }
         }
@@ -158,7 +148,7 @@ struct WelcomeView: View {
                     removal: .move(edge: .top).combined(with: .opacity)
                 )
             )
-            .accessibilityLabel("Everyone has a right \(phrases[currentPhraseIndex])")
+            .accessibilityLabel(Text("Everyone has a right") + Text(" ") + Text(phrases[currentPhraseIndex]))
     }
 
     // MARK: - Bottom Section
@@ -185,13 +175,13 @@ struct WelcomeView: View {
                 .padding(.vertical, Design.Spacing.md)
                 .background(
                     LinearGradient(
-                        colors: [Design.Colors.accent, Design.Colors.accentDark],
+                        colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                         startPoint: .leading,
                         endPoint: .trailing
                     ),
                     in: Capsule()
                 )
-                .shadow(color: Design.Colors.accent.opacity(0.3), radius: 12, y: 6)
+                .shadow(color: Design.Colors.teal.opacity(0.3), radius: 12, y: 6)
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel("Get Started")
@@ -203,25 +193,12 @@ struct WelcomeView: View {
 
     @ViewBuilder
     private var legalFooter: some View {
-        HStack(spacing: Design.Spacing.xs) {
-            Text("By continuing, you agree to our")
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Design.Colors.textTertiary)
-
-            Link("Terms", destination: URL(string: "https://pulseroute.com/terms")!)
-                .font(.system(.caption, design: .rounded, weight: .medium))
-                .foregroundStyle(Design.Colors.accent)
-
-            Text("and")
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Design.Colors.textTertiary)
-
-            Link("Privacy", destination: URL(string: "https://pulseroute.com/privacy")!)
-                .font(.system(.caption, design: .rounded, weight: .medium))
-                .foregroundStyle(Design.Colors.accent)
-        }
-        .multilineTextAlignment(.center)
-        .padding(.horizontal, Design.Spacing.md)
+        Text("By continuing, you agree to our [Terms](https://www.dopplervpn.org/en/terms) and [Privacy](https://www.dopplervpn.org/en/privacy)")
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(Design.Colors.textTertiary)
+            .tint(Design.Colors.teal)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Design.Spacing.md)
     }
 
     // MARK: - Animation

@@ -50,12 +50,12 @@ struct ConfigInputView: View {
         VStack(spacing: Design.Spacing.sm) {
             Image(systemName: "plus")
                 .font(.system(size: 36, weight: .medium))
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
 
             Text("Add a Server")
                 .font(.system(.title3, design: .rounded, weight: .bold))
 
-            Text("Paste a VLESS URI or subscription URL")
+            Text("Paste a server URI or subscription URL")
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -128,7 +128,7 @@ struct ConfigInputView: View {
 
                 // Text field
                 TextField(
-                    "vless://... or https://...",
+                    "Server link or subscription URL",
                     text: $inputText,
                     axis: .vertical
                 )
@@ -180,7 +180,7 @@ struct ConfigInputView: View {
                     .foregroundStyle(.white)
                     .background(
                         LinearGradient(
-                            colors: [Design.Colors.accent, Design.Colors.accentDark],
+                            colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
@@ -210,7 +210,7 @@ struct ConfigInputView: View {
                 .font(.caption)
         case .subscription:
             Image(systemName: "link")
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
                 .font(.caption)
         case .unknown:
             Image(systemName: "text.cursor")
@@ -221,9 +221,9 @@ struct ConfigInputView: View {
 
     private var inputTypeLabel: String {
         switch inputType {
-        case .vless: return "VLESS URI detected"
-        case .subscription: return "Subscription URL detected"
-        case .unknown: return "Enter URI or URL"
+        case .vless: return String(localized: "Server URI detected")
+        case .subscription: return String(localized: "Subscription URL detected")
+        case .unknown: return String(localized: "Enter URI or URL")
         }
     }
 
@@ -234,14 +234,14 @@ struct ConfigInputView: View {
         VStack(alignment: .leading, spacing: Design.Spacing.md) {
             helpRow(
                 icon: "lock.shield",
-                title: "VLESS URI",
-                description: "Paste a vless:// link to add a single server"
+                title: "Server URI",
+                description: "Paste a server link to add a single server"
             )
 
             helpRow(
                 icon: "arrow.triangle.2.circlepath",
                 title: "Subscription URL",
-                description: "Paste a Marzban subscription URL to import multiple servers"
+                description: "Paste a subscription URL to import multiple servers"
             )
         }
         .padding(Design.Spacing.md)
@@ -252,7 +252,7 @@ struct ConfigInputView: View {
         HStack(alignment: .top, spacing: Design.Spacing.md) {
             Image(systemName: icon)
                 .font(.body)
-                .foregroundStyle(Design.Colors.accent)
+                .foregroundStyle(Design.Colors.teal)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -298,7 +298,7 @@ struct ConfigInputView: View {
             }
         } else {
             withAnimation(Design.Animation.springQuick) {
-                errorMessage = "Enter a vless:// URI or an https:// subscription URL."
+                errorMessage = String(localized: "Enter a valid server URI or subscription URL.")
             }
         }
     }

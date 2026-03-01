@@ -8,7 +8,7 @@
 	</array>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.pulsingroutes.vpn</string>
+		<string>group.com.simnetiq.vpnreact</string>
 	</array>
 </dict>
 </plist>

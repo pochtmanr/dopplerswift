@@ -1,9 +1,13 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct ContentView: View {
     let vpnManager: VPNManager
     let accountManager: AccountManager
     let rcService: RevenueCatService
+    let syncService: SubscriptionSyncService
     let languageManager: LanguageManager
 
     @State private var servers: [ServerConfig] = []
@@ -27,6 +31,7 @@ struct ContentView: View {
     @State private var cloudError: String?
     @State private var showPaywall = false
     @State private var paywallPending = false
+    @State private var conflictOwnerId: String?
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -78,30 +83,30 @@ struct ContentView: View {
 
     @ViewBuilder
     private var sidebar: some View {
-        ServerListView(
-            servers: $servers,
-            selectedServerID: $selectedServerID,
-            cloudServers: cloudServers,
-            isLoadingCloud: isLoadingCloud,
-            cloudError: cloudError,
-            isUserPro: isEffectivelyPro,
-            onRefreshCloud: { await loadCloudServers() },
-            onSelectCloudServer: { selectCloudServer($0) }
-        )
-        .navigationTitle("Servers")
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
+        List {
+            ForEach(AppTab.allCases, id: \.self) { tab in
                 Button {
-                    showAddServer = true
+                    selectedTab = tab
                 } label: {
-                    Image(systemName: "plus")
+                    Label(tab.title, systemImage: tab.icon)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .foregroundStyle(selectedTab == tab ? Design.Colors.teal : .primary)
+                        .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Add Server")
+                .buttonStyle(.plain)
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(selectedTab == tab ? Design.Colors.teal.opacity(0.15) : .clear)
+                        .padding(.horizontal, 4)
+                )
+                .listRowSeparator(.hidden)
             }
         }
-        .sheet(isPresented: $showAddServer) {
-            addServerSheet
-        }
+        .listStyle(.sidebar)
+        .navigationTitle("Doppler VPN")
+        .tint(Design.Colors.teal)
         .onChange(of: servers) {
             ConfigStore.saveServers(servers)
         }
@@ -114,40 +119,66 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        TabView(selection: $selectedTab) {
-            Tab("VPN", systemImage: "shield.fill", value: .vpn) {
-                HomeView(
-                    vpnManager: vpnManager,
-                    selectedServer: selectedServer,
-                    onConnectAndConvert: convertAndConnect,
-                    onSmartRouteTap: { selectedTab = .smartRoute },
-                    smartRoutingEnabled: $smartRoutingEnabled,
-                    smartRoutingCountry: effectiveSmartRoutingCountry
-                )
-            }
-
-            Tab("Smart Route", systemImage: "arrow.triangle.branch", value: .smartRoute) {
-                SmartRoutingView(
-                    isEnabled: $smartRoutingEnabled,
-                    selectedCountryCode: $smartRoutingCountry,
-                    detectedCountryCode: detectedCountryCode,
-                    vpnStatus: vpnManager.status,
-                    customDomains: $smartRoutingCustomDomains,
-                    bypassTLDWebsites: $bypassTLDWebsites,
-                    bypassGovernmentBanking: $bypassGovernmentBanking
-                )
-            }
-
-            Tab("Profile", systemImage: "person.circle", value: .profile) {
-                ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager, languageManager: languageManager)
+        NavigationStack {
+            Group {
+                switch selectedTab {
+                case .vpn:
+                    HomeView(
+                        vpnManager: vpnManager,
+                        selectedServer: selectedServer,
+                        onConnectAndConvert: convertAndConnect,
+                        onServerTap: { showServerList = true },
+                        onSmartRouteTap: { selectedTab = .smartRoute },
+                        smartRoutingEnabled: $smartRoutingEnabled,
+                        smartRoutingCountry: effectiveSmartRoutingCountry
+                    )
+                case .smartRoute:
+                    SmartRoutingView(
+                        isEnabled: $smartRoutingEnabled,
+                        selectedCountryCode: $smartRoutingCountry,
+                        detectedCountryCode: detectedCountryCode,
+                        vpnStatus: vpnManager.status,
+                        customDomains: $smartRoutingCustomDomains,
+                        bypassTLDWebsites: $bypassTLDWebsites,
+                        bypassGovernmentBanking: $bypassGovernmentBanking
+                    )
+                case .profile:
+                    ProfileView(accountManager: accountManager, rcService: rcService, syncService: syncService, vpnManager: vpnManager, languageManager: languageManager)
+                }
             }
         }
-        .tint(Design.Colors.teal)
+        .sheet(isPresented: $showServerList) {
+            serverListSheet
+        }
+        .sheet(isPresented: $showAddServer) {
+            addServerSheet
+        }
         .sheet(isPresented: $showPaywall) {
             PaywallView(rcService: rcService, isPresented: $showPaywall)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.clear)
+        }
+        .sheet(item: $conflictOwnerId) { owner in
+            SubscriptionConflictSheet(
+                ownerAccountId: owner,
+                onSwitchAccount: { ownerId in
+                    conflictOwnerId = nil
+                    accountManager.prefillAccountId = ownerId
+                    accountManager.switchAccount()
+                },
+                onDismiss: { conflictOwnerId = nil },
+                onContactSupport: {
+                    conflictOwnerId = nil
+                    openSupportEmail()
+                }
+            )
+            .presentationBackground(.ultraThinMaterial)
+        }
+        .onChange(of: rcService.subscriptionRejectedByServer, initial: true) {
+            if rcService.subscriptionRejectedByServer, let owner = rcService.rejectedOwnerAccountId {
+                conflictOwnerId = owner
+            }
         }
         .onChange(of: smartRoutingEnabled) {
             if smartRoutingEnabled && !isEffectivelyPro {
@@ -173,6 +204,14 @@ struct ContentView: View {
         .onChange(of: bypassGovernmentBanking) {
             ConfigStore.saveBypassGovernmentBanking(bypassGovernmentBanking)
             reconnectIfNeeded()
+        }
+        .onChange(of: showServerList) {
+            if !showServerList && paywallPending {
+                paywallPending = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showPaywall = true
+                }
+            }
         }
     }
 
@@ -233,7 +272,7 @@ struct ContentView: View {
 
             Tab("Profile", systemImage: "person.circle", value: .profile) {
                 NavigationStack {
-                    ProfileView(accountManager: accountManager, rcService: rcService, vpnManager: vpnManager, languageManager: languageManager)
+                    ProfileView(accountManager: accountManager, rcService: rcService, syncService: syncService, vpnManager: vpnManager, languageManager: languageManager)
                 }
             }
         }
@@ -243,6 +282,27 @@ struct ContentView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.clear)
+        }
+        .sheet(item: $conflictOwnerId) { owner in
+            SubscriptionConflictSheet(
+                ownerAccountId: owner,
+                onSwitchAccount: { ownerId in
+                    conflictOwnerId = nil
+                    accountManager.prefillAccountId = ownerId
+                    accountManager.switchAccount()
+                },
+                onDismiss: { conflictOwnerId = nil },
+                onContactSupport: {
+                    conflictOwnerId = nil
+                    openSupportEmail()
+                }
+            )
+            .presentationBackground(.ultraThinMaterial)
+        }
+        .onChange(of: rcService.subscriptionRejectedByServer, initial: true) {
+            if rcService.subscriptionRejectedByServer, let owner = rcService.rejectedOwnerAccountId {
+                conflictOwnerId = owner
+            }
         }
         .onChange(of: servers) {
             ConfigStore.saveServers(servers)
@@ -536,6 +596,35 @@ struct ContentView: View {
         return try? VLessParser.parse(rawURI)
     }
 
+    private func openSupportEmail() {
+        let currentAccountId = accountManager.account?.accountId ?? "unknown"
+        let ownerAccountId = rcService.rejectedOwnerAccountId ?? "unknown"
+        let subject = "Subscription Transfer Request"
+        let body = """
+        Hi Doppler VPN Support,
+
+        I need help with a subscription issue.
+
+        My current account ID: \(currentAccountId)
+        Subscription owner account ID: \(ownerAccountId)
+
+        Please help me resolve this subscription conflict.
+
+        Thank you.
+        """
+
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+
+        if let url = URL(string: "mailto:support@simnetiq.store?subject=\(encodedSubject)&body=\(encodedBody)") {
+            #if os(iOS)
+            UIApplication.shared.open(url)
+            #elseif os(macOS)
+            NSWorkspace.shared.open(url)
+            #endif
+        }
+    }
+
     private func selectCloudServer(_ supabaseServer: SupabaseServer) {
         if supabaseServer.isPremium == true && !isEffectivelyPro {
             showPaywall = true
@@ -582,19 +671,35 @@ enum AppTab: String, CaseIterable {
     case vpn
     case smartRoute
     case profile
+
+    var title: String {
+        switch self {
+        case .vpn: "VPN"
+        case .smartRoute: "Smart Route"
+        case .profile: "Profile"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .vpn: "shield.fill"
+        case .smartRoute: "arrow.triangle.branch"
+        case .profile: "person.circle"
+        }
+    }
 }
 
 // MARK: - Previews
 
 #Preview("iPhone") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService(), languageManager: LanguageManager.shared)
 }
 
 #Preview("iPhone Dark") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService(), languageManager: LanguageManager.shared)
         .preferredColorScheme(.dark)
 }
 
 #Preview("iPad / macOS") {
-    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), languageManager: LanguageManager.shared)
+    ContentView(vpnManager: VPNManager(), accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService(), languageManager: LanguageManager.shared)
 }

@@ -64,16 +64,18 @@ struct ConnectionStatusView: View {
             .fill(
                 RadialGradient(
                     colors: [
-                        statusColor.opacity(glowOpacity),
-                        statusColor.opacity(glowOpacity * 0.3),
+                        statusColor.opacity(glowOpacity * 0.8),
+                        statusColor.opacity(glowOpacity * 0.4),
+                        statusColor.opacity(glowOpacity * 0.1),
                         Color.clear
                     ],
                     center: .center,
-                    startRadius: Design.Size.connectButtonDiameter * 0.3,
-                    endRadius: ringDiameter * 0.75
+                    startRadius: Design.Size.connectButtonDiameter * 0.2,
+                    endRadius: ringDiameter * 1.0
                 )
             )
-            .frame(width: ringDiameter + 60, height: ringDiameter + 60)
+            .frame(width: ringDiameter + 100, height: ringDiameter + 100)
+            .blur(radius: 20)
     }
 
     // MARK: - Ring Track
@@ -129,7 +131,7 @@ struct ConnectionStatusView: View {
     @ViewBuilder
     private var connectedRing: some View {
         Circle()
-            .stroke(statusColor, lineWidth: 4)
+            .stroke(statusColor.opacity(0.5), lineWidth: 4)
             .frame(width: ringDiameter, height: ringDiameter)
     }
 

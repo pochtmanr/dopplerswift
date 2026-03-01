@@ -5,7 +5,9 @@ import SwiftUI
 struct ProfileView: View {
     let accountManager: AccountManager
     let rcService: RevenueCatService
+    let syncService: SubscriptionSyncService
     let vpnManager: VPNManager
+    let languageManager: LanguageManager
 
     @State private var copied = false
     @State private var showDeleteConfirmation = false
@@ -14,6 +16,7 @@ struct ProfileView: View {
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var showDeleteError = false
+    @State private var showConnectAccountSheet = false
 
     // MARK: - Computed
 
@@ -24,16 +27,10 @@ struct ProfileView: View {
     }
 
     private var tierInfo: TierInfo {
-        // RevenueCat is the primary source of truth for tier
-        switch rcService.currentTier {
+        switch rcService.effectiveTier(fallbackAccount: account) {
         case .premium: return .premium
         case .pro: return .pro
-        case .free:
-            // Fallback to Supabase account tier (for web/Stripe subscriptions)
-            guard let account else { return .free }
-            if account.isPremium { return .premium }
-            if account.isPro { return .pro }
-            return .free
+        case .free: return .free
         }
     }
 
@@ -66,8 +63,11 @@ struct ProfileView: View {
                         Text(accountId)
                             .font(.system(.title3, design: .monospaced, weight: .bold))
 
-                        // Copy button
-                        copyButton
+                        // Action buttons
+                        HStack(spacing: Design.Spacing.sm) {
+                            copyButton
+                            connectAccountButton
+                        }
                     }
                     .padding(.horizontal, Design.Spacing.md)
                     .padding(.vertical, Design.Spacing.md)
@@ -77,19 +77,30 @@ struct ProfileView: View {
                     // Settings Card (Subscription + App Settings)
                     VStack(spacing: 0) {
                         NavigationLink {
-                            SubscriptionView(accountManager: accountManager, rcService: rcService)
+                            SubscriptionView(accountManager: accountManager, rcService: rcService, syncService: syncService)
                         } label: {
-                            settingsRow(icon: "creditcard.fill", color: .blue, title: "Subscription")
+                            settingsRow(icon: "creditcard.fill", color: Design.Colors.teal, title: "Subscription")
                         }
                         .buttonStyle(.plain)
                         Divider().padding(.leading, 40)
                         NavigationLink {
-                            AppSettingsView(vpnManager: vpnManager)
+                            AppSettingsView(vpnManager: vpnManager, languageManager: languageManager)
                         } label: {
                             settingsRow(icon: "gearshape.fill", color: Design.Colors.textSecondary, title: "App Settings")
                         }
                         .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, Design.Spacing.md)
+                    .padding(.vertical, Design.Spacing.xs)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.CornerRadius.lg))
+
+                    // Devices Card
+                    NavigationLink {
+                        DevicesView(accountManager: accountManager)
+                    } label: {
+                        settingsRow(icon: "iphone.gen3", color: Design.Colors.teal, title: "Devices")
+                    }
+                    .buttonStyle(.plain)
                     .padding(.horizontal, Design.Spacing.md)
                     .padding(.vertical, Design.Spacing.xs)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.CornerRadius.lg))
@@ -145,7 +156,7 @@ struct ProfileView: View {
 
                     // Version Footer
                     VStack(spacing: 2) {
-                        Text("Pulse Route")
+                        Text("Doppler VPN")
                         Text("Version \(appVersion)")
                     }
                     .font(.system(.caption, design: .rounded))
@@ -185,6 +196,10 @@ struct ProfileView: View {
         } message: {
             Text(deleteError ?? "An error occurred.")
         }
+        .sheet(isPresented: $showConnectAccountSheet) {
+            ConnectAccountSheet(accountManager: accountManager)
+                .presentationDetents([.medium])
+        }
         .navigationTitle("Profile")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
@@ -219,10 +234,29 @@ struct ProfileView: View {
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
-        .tint(copied ? .green : .accentColor)
+        .tint(copied ? .green : Design.Colors.teal)
         #if os(iOS)
         .sensoryFeedback(.impact(weight: .light), trigger: copied)
         #endif
+    }
+
+    // MARK: - Connect Account Button
+
+    @ViewBuilder
+    private var connectAccountButton: some View {
+        Button {
+            showConnectAccountSheet = true
+        } label: {
+            Label(
+                account?.hasLinkedContact == true ? "Linked" : "Link",
+                systemImage: account?.hasLinkedContact == true ? "checkmark.circle.fill" : "link"
+            )
+            .font(.system(.subheadline, design: .rounded, weight: .medium))
+            .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .tint(Design.Colors.teal)
     }
 
     // MARK: - Tier Badge
@@ -244,7 +278,7 @@ struct ProfileView: View {
     // MARK: - Settings Row (display only)
 
     @ViewBuilder
-    private func settingsRow(icon: String, color: Color, title: String) -> some View {
+    private func settingsRow(icon: String, color: Color, title: LocalizedStringKey) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .medium))
@@ -268,7 +302,7 @@ struct ProfileView: View {
     // MARK: - Settings Button (tappable)
 
     @ViewBuilder
-    private func settingsButton(icon: String, color: Color, title: String, action: @escaping () -> Void) -> some View {
+    private func settingsButton(icon: String, color: Color, title: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             settingsRow(icon: icon, color: color, title: title)
         }
@@ -290,16 +324,9 @@ struct ProfileView: View {
     }
 
     private func performDeleteAccount() async {
-        // Check if user has an active subscription
-        if rcService.currentTier != .free {
-            deleteError = "You have an active subscription. Please cancel it in the App Store before deleting your account."
-            showDeleteError = true
-            return
-        }
-
-        // Also check Supabase tier as fallback
-        if let account, account.isPro || account.isPremium {
-            deleteError = "You have an active subscription. Please cancel it before deleting your account."
+        // Check if user has an active subscription (RC + Supabase fallback)
+        if rcService.effectiveTier(fallbackAccount: account) != .free {
+            deleteError = String(localized: "You have an active subscription. Please cancel it in the App Store before deleting your account.")
             showDeleteError = true
             return
         }
@@ -352,25 +379,25 @@ private enum TierInfo {
 
     var planName: String {
         switch self {
-        case .free: "Free Plan"
-        case .pro: "Pro Plan"
-        case .premium: "Premium Plan"
+        case .free: String(localized: "Free Plan")
+        case .pro: String(localized: "Pro Plan")
+        case .premium: String(localized: "Premium Plan")
         }
     }
 
     var label: String {
         switch self {
-        case .free: "FREE"
-        case .pro: "PRO"
-        case .premium: "PREMIUM"
+        case .free: String(localized: "FREE")
+        case .pro: String(localized: "PRO")
+        case .premium: String(localized: "PREMIUM")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .free: "Upgrade for premium servers"
-        case .pro: "Active subscription"
-        case .premium: "All features unlocked"
+        case .free: String(localized: "Upgrade for premium servers")
+        case .pro: String(localized: "Active subscription")
+        case .premium: String(localized: "All features unlocked")
         }
     }
 
@@ -385,7 +412,7 @@ private enum TierInfo {
     var color: Color {
         switch self {
         case .free: .secondary
-        case .pro: .accentColor
+        case .pro: Design.Colors.teal
         case .premium: .orange
         }
     }
@@ -395,13 +422,13 @@ private enum TierInfo {
 
 #Preview("Profile") {
     NavigationStack {
-        ProfileView(accountManager: AccountManager(), rcService: RevenueCatService(), vpnManager: VPNManager())
+        ProfileView(accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService(), vpnManager: VPNManager(), languageManager: LanguageManager.shared)
     }
 }
 
 #Preview("Profile Dark") {
     NavigationStack {
-        ProfileView(accountManager: AccountManager(), rcService: RevenueCatService(), vpnManager: VPNManager())
+        ProfileView(accountManager: AccountManager(), rcService: RevenueCatService(), syncService: SubscriptionSyncService(), vpnManager: VPNManager(), languageManager: LanguageManager.shared)
     }
     .preferredColorScheme(.dark)
 }

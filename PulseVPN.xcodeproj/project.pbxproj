@@ -193,6 +193,20 @@
 			knownRegions = (
 				en,
 				Base,
+				ar,
+				de,
+				es,
+				fr,
+				he,
+				id,
+				ja,
+				"pt-BR",
+				ru,
+				tr,
+				uk,
+				vi,
+				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 38DC98852F511ACC00B2E9D8;
 			minimizedProjectReferenceProxies = 1;
@@ -382,8 +396,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				EXCLUDED_SOURCE_FILE_NAMES = Secrets.xcconfig;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SupportingFiles/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Doppler VPN";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -399,8 +415,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.pulsingroutes.vpn;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.simnetiq.vpnreact;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				REVENUECAT_IOS_API_KEY = appl_VnIBmCCtZiLNWYgoLnuAUtOtWyh;
@@ -432,8 +448,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				EXCLUDED_SOURCE_FILE_NAMES = Secrets.xcconfig;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SupportingFiles/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Doppler VPN";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -449,8 +467,8 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.pulsingroutes.vpn;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.simnetiq.vpnreact;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				REVENUECAT_IOS_API_KEY = appl_VnIBmCCtZiLNWYgoLnuAUtOtWyh;
@@ -479,7 +497,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PulseVPNTunnel/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = PulseVPNTunnel;
+				INFOPLIST_KEY_CFBundleDisplayName = "Doppler VPN Tunnel";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -488,9 +506,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0.0;
 				OTHER_LDFLAGS = "-lresolv";
-				PRODUCT_BUNDLE_IDENTIFIER = com.pulsingroutes.vpn.tunnel;
+				PRODUCT_BUNDLE_IDENTIFIER = com.simnetiq.vpnreact.tunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SKIP_INSTALL = YES;
@@ -514,7 +532,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PulseVPNTunnel/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = PulseVPNTunnel;
+				INFOPLIST_KEY_CFBundleDisplayName = "Doppler VPN Tunnel";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -523,9 +541,9 @@
 					"@executable_path/../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0.0;
 				OTHER_LDFLAGS = "-lresolv";
-				PRODUCT_BUNDLE_IDENTIFIER = com.pulsingroutes.vpn.tunnel;
+				PRODUCT_BUNDLE_IDENTIFIER = com.simnetiq.vpnreact.tunnel;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				SKIP_INSTALL = YES;

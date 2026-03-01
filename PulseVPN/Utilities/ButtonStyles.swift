@@ -14,7 +14,7 @@ struct ScalePressStyle: ButtonStyle {
 // MARK: - Primary CTA Button (fully rounded gradient)
 
 struct PrimaryCTAButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var isLoading: Bool = false
     var isDisabled: Bool = false
     let action: () -> Void
@@ -35,13 +35,13 @@ struct PrimaryCTAButton: View {
             .frame(height: 52)
             .background(
                 LinearGradient(
-                    colors: [Design.Colors.accent, Design.Colors.accentDark],
+                    colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
                 in: Capsule()
             )
-            .shadow(color: Design.Colors.accent.opacity(0.3), radius: 12, y: 6)
+            .shadow(color: Design.Colors.teal.opacity(0.3), radius: 12, y: 6)
         }
         .disabled(isLoading || isDisabled)
         .buttonStyle(ScalePressStyle())
@@ -77,6 +77,6 @@ struct SecondaryCTAButton: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 1))
         }
         .buttonStyle(ScalePressStyle())
-        .tint(.accentColor)
+        .tint(Design.Colors.teal)
     }
 }

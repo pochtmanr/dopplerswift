@@ -13,10 +13,10 @@ struct PackageCard: View {
             HStack(spacing: 12) {
                 // Radio indicator
                 Circle()
-                    .strokeBorder(isSelected ? Design.Colors.accent : .gray.opacity(0.4), lineWidth: 2)
+                    .strokeBorder(isSelected ? Design.Colors.teal : .gray.opacity(0.4), lineWidth: 2)
                     .background(
                         Circle()
-                            .fill(isSelected ? Design.Colors.accent : .clear)
+                            .fill(isSelected ? Design.Colors.teal : .clear)
                             .padding(4)
                     )
                     .frame(width: 24, height: 24)
@@ -33,7 +33,7 @@ struct PackageCard: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Design.Colors.accent, in: Capsule())
+                                .background(Design.Colors.teal, in: Capsule())
                         }
                     }
 
@@ -44,14 +44,14 @@ struct PackageCard: View {
 
                 Spacer()
 
-                Text(package.pricePerMonthString + "/mo")
+                Text("\(package.pricePerMonthString)/\(Text("mo"))")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.primary)
             }
             .padding(Design.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                    .fill(isSelected ? Design.Colors.accent.opacity(0.08) : .clear)
+                    .fill(isSelected ? Design.Colors.teal.opacity(0.08) : .clear)
             )
             .background(
                 .ultraThinMaterial,
@@ -59,7 +59,7 @@ struct PackageCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-                    .strokeBorder(isSelected ? Design.Colors.accent : .clear, lineWidth: 1.5)
+                    .strokeBorder(isSelected ? Design.Colors.teal : .clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

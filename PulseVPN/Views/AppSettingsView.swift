@@ -27,13 +27,6 @@ struct AppSettingsView: View {
                 Toggle("Always-on VPN", isOn: $killSwitch)
             }
 
-            Section("Developer") {
-                NavigationLink {
-                    TunnelDebugView()
-                } label: {
-                    Label("Tunnel Logs", systemImage: "ant.fill")
-                }
-            }
         }
         .navigationTitle("App Settings")
         #if os(iOS)

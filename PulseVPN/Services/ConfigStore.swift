@@ -6,7 +6,7 @@ enum ConfigStore {
 
     // MARK: - Constants
 
-    private static let appGroupID = "group.com.pulsingroutes.vpn"
+    private static let appGroupID = "group.com.simnetiq.vpnreact"
 
     private enum Key {
         static let xrayConfigJSON = "xray_config_json"

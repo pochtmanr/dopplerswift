@@ -40,7 +40,7 @@ struct HelpSupportView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "envelope.fill")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Design.Colors.teal)
                             .frame(width: 24)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -72,7 +72,7 @@ struct HelpSupportView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Design.Colors.teal)
                             .frame(width: 24)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -112,7 +112,7 @@ struct HelpSupportView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "book.fill")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Design.Colors.teal)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -210,8 +210,8 @@ struct HelpSupportView: View {
 
 private struct FAQItem: Identifiable {
     let id = UUID()
-    let question: String
-    let answer: String
+    let question: LocalizedStringResource
+    let answer: LocalizedStringResource
     let icon: String
 
     static let allItems: [FAQItem] = [
@@ -227,7 +227,7 @@ private struct FAQItem: Identifiable {
         ),
         FAQItem(
             question: "What is Smart Route?",
-            answer: "Smart Route lets domestic websites and services bypass the VPN so they load faster and work correctly. Choose your home country, and Pulse Route automatically routes local banking, government, streaming, and e-commerce traffic directly. You can also add custom domains to always bypass VPN.",
+            answer: "Smart Route lets domestic websites and services connect directly so they load faster and work correctly. Choose your home country, and Doppler VPN automatically routes local banking, government, streaming, and e-commerce traffic through a direct connection. You can also add custom domains.",
             icon: "arrow.triangle.branch"
         ),
         FAQItem(
@@ -237,7 +237,7 @@ private struct FAQItem: Identifiable {
         ),
         FAQItem(
             question: "Is my connection secure?",
-            answer: "Yes. Pulse Route uses VLESS protocol with Reality transport — one of the most secure and undetectable VPN protocols available. Your traffic is fully encrypted.",
+            answer: "Yes. Doppler VPN uses advanced encryption protocols to protect your traffic. All data is fully encrypted end-to-end, ensuring your online activity remains private and secure.",
             icon: "lock.shield"
         ),
     ]

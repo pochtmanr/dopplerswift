@@ -1,5 +1,6 @@
 import Foundation
 import RevenueCat
+import SwiftUI
 
 // MARK: - Constants
 
@@ -49,11 +50,19 @@ enum PackagePeriod: String, CaseIterable, Sendable {
     case sixMonth = "SIX_MONTH"
     case annual = "ANNUAL"
 
-    var displayName: String {
+    var displayName: LocalizedStringKey {
         switch self {
         case .monthly: return "Monthly"
         case .sixMonth: return "6 Months"
         case .annual: return "Yearly"
+        }
+    }
+
+    var displayNameRaw: String {
+        switch self {
+        case .monthly: return "monthly"
+        case .sixMonth: return "6 months"
+        case .annual: return "yearly"
         }
     }
 
@@ -81,7 +90,7 @@ struct SubscriptionPackage: Identifiable, Sendable {
     let trialDays: Int
 
     var billingDescription: String {
-        "\(priceString) / \(period.displayName.lowercased())"
+        "\(priceString) / \(period.displayNameRaw)"
     }
 
     static func from(rcPackage: RevenueCat.Package) -> SubscriptionPackage? {
@@ -141,6 +150,20 @@ struct SubscriptionPackage: Identifiable, Sendable {
     }
 }
 
+// MARK: - Product ID Helpers
+
+extension String {
+    /// Derives a human-readable period name from a RevenueCat product identifier.
+    var planPeriodName: LocalizedStringKey? {
+        let lower = lowercased()
+        if lower.contains("yearly") || lower.contains("annual") { return "Yearly" }
+        if lower.contains("6m") || lower.contains("sixmonth") || lower.contains("six_month") { return "6 Months" }
+        if lower.contains("monthly") { return "Monthly" }
+        if lower.contains("weekly") { return "Weekly" }
+        return nil
+    }
+}
+
 // MARK: - Purchase / Restore Results
 
 struct PurchaseResult: Sendable {
@@ -153,4 +176,6 @@ struct RestoreResult: Sendable {
     let success: Bool
     let restored: Bool
     let error: String?
+    var ownershipConflict: Bool = false
+    var ownerAccountId: String?
 }

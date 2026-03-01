@@ -4,13 +4,13 @@ struct TunnelDebugView: View {
     @State private var logContent = ""
     @State private var timer: Timer?
 
-    private static let appGroupID = "group.com.pulsingroutes.vpn"
+    private static let appGroupID = "group.com.simnetiq.vpnreact"
     private static let logFileName = "tunnel_debug.log"
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                Text(logContent.isEmpty ? "No tunnel logs yet.\nTry connecting to a server, then come back here." : logContent)
+                Text(logContent.isEmpty ? String(localized: "No tunnel logs yet.\nTry connecting to a server, then come back here.") : logContent)
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(logContent.isEmpty ? Design.Colors.textTertiary : Design.Colors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -62,7 +62,7 @@ struct TunnelDebugView: View {
 
     private func loadLogs() {
         guard let url = logFileURL else {
-            logContent = "App Group container not available."
+            logContent = String(localized: "App Group container not available.")
             return
         }
         logContent = (try? String(contentsOf: url, encoding: .utf8)) ?? ""

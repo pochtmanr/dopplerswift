@@ -27,7 +27,7 @@ struct SpeedTestWidget: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .glassEffect(
-                isRunning ? .regular.tint(Design.Colors.accent.opacity(0.1)) : .regular,
+                isRunning ? .regular.tint(Design.Colors.teal.opacity(0.1)) : .regular,
                 in: .rect(cornerRadius: Design.CornerRadius.lg)
             )
         }
@@ -45,11 +45,11 @@ struct SpeedTestWidget: View {
             if isRunning {
                 ProgressView()
                     .controlSize(.regular)
-                    .tint(Design.Colors.accent)
+                    .tint(Design.Colors.teal)
 
                 Text(phaseLabel)
                     .font(.system(.caption2, design: .rounded, weight: .medium))
-                    .foregroundStyle(Design.Colors.accent)
+                    .foregroundStyle(Design.Colors.teal)
             } else if let result {
                 resultDisplay(result)
             } else {
@@ -66,7 +66,7 @@ struct SpeedTestWidget: View {
             if isRunning {
                 ProgressView()
                     .controlSize(.small)
-                    .tint(Design.Colors.accent)
+                    .tint(Design.Colors.teal)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Speed Test")
@@ -75,14 +75,14 @@ struct SpeedTestWidget: View {
 
                     Text(phaseLabel)
                         .font(.system(.caption, design: .rounded, weight: .medium))
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                 }
 
                 Spacer()
             } else if let result {
                 Image(systemName: "gauge.with.dots.needle.67percent")
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(Design.Colors.accent)
+                    .foregroundStyle(Design.Colors.teal)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Speed Test")
@@ -96,7 +96,7 @@ struct SpeedTestWidget: View {
 
                         Label(String(format: "%.1f", result.uploadMbps), systemImage: "arrow.up")
                             .font(.system(.caption, design: .monospaced, weight: .medium))
-                            .foregroundStyle(Design.Colors.accent)
+                            .foregroundStyle(Design.Colors.teal)
 
                         Text("\(result.pingMs) ms")
                             .font(.system(.caption, design: .monospaced, weight: .medium))
@@ -110,7 +110,7 @@ struct SpeedTestWidget: View {
                     .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
-                    .background(Design.Colors.accent, in: Circle())
+                    .background(Design.Colors.teal, in: Circle())
             } else {
                 Image(systemName: "gauge.with.dots.needle.33percent")
                     .font(.system(size: 24, weight: .medium))
@@ -132,7 +132,7 @@ struct SpeedTestWidget: View {
                     .font(.system(.caption2, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
-                    .background(Design.Colors.accent, in: Circle())
+                    .background(Design.Colors.teal, in: Circle())
             }
         }
         .padding(.horizontal, Design.Spacing.md)
@@ -159,7 +159,7 @@ struct SpeedTestWidget: View {
     private func resultDisplay(_ result: SpeedTestResult) -> some View {
         Image(systemName: "gauge.with.dots.needle.67percent")
             .font(.system(size: 24, weight: .medium))
-            .foregroundStyle(Design.Colors.accent)
+            .foregroundStyle(Design.Colors.teal)
 
         VStack(spacing: 2) {
             HStack(spacing: 4) {
@@ -176,7 +176,7 @@ struct SpeedTestWidget: View {
             HStack(spacing: 4) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Design.Colors.accent)
+                    .foregroundStyle(Design.Colors.teal)
 
                 Text(String(format: "%.0f", result.uploadMbps))
                     .font(.system(.caption, design: .monospaced, weight: .bold))

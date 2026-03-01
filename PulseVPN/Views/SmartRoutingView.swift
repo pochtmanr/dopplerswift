@@ -250,7 +250,7 @@ struct SmartRoutingView: View {
                 Divider().padding(.leading, 40)
                 bypassToggleRow(
                     icon: "building.columns.fill",
-                    text: "Government & banking",
+                    text: String(localized: "Government & banking"),
                     isOn: $bypassGovernmentBanking
                 )
             }

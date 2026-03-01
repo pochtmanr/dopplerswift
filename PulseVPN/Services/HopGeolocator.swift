@@ -23,7 +23,7 @@ enum HopGeolocator {
         guard !ips.isEmpty else { return [:] }
 
         // ip-api.com batch: POST array of IPs, get back array of results
-        let url = URL(string: "http://ip-api.com/batch?fields=status,query,lat,lon,city,countryCode,isp")!
+        let url = URL(string: "https://pro.ip-api.com/batch?fields=status,query,lat,lon,city,countryCode,isp")!
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

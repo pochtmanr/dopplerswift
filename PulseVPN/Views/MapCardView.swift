@@ -43,7 +43,7 @@ struct MapCardView: View {
                 Annotation("You", coordinate: coord) {
                     Image(systemName: "person.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Design.Colors.teal)
                         .background(Circle().fill(.white).frame(width: 24, height: 24))
                 }
             }
@@ -53,7 +53,7 @@ struct MapCardView: View {
                 Annotation("Server", coordinate: coord) {
                     Image(systemName: "server.rack")
                         .font(.caption)
-                        .foregroundStyle(Design.Colors.accent)
+                        .foregroundStyle(Design.Colors.teal)
                         .background(Circle().fill(.white).frame(width: 24, height: 24))
                 }
             }
@@ -63,7 +63,7 @@ struct MapCardView: View {
                let serverCoord = serverGeo?.coordinate {
                 MapPolyline(coordinates: geodesicArc(from: userCoord, to: serverCoord))
                     .stroke(
-                        Design.Colors.accent.opacity(0.5),
+                        Design.Colors.teal.opacity(0.5),
                         style: StrokeStyle(lineWidth: 2, dash: [8, 4])
                     )
             }

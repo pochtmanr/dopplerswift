@@ -14,10 +14,14 @@ final class VPNManager {
 
     private var manager: NETunnelProviderManager?
     private var statusObserver: Any?
+    /// Guards against rapid connect/disconnect race conditions
+    private var isPerformingAction = false
+    /// Tracks if on-demand was temporarily disabled for disconnect
+    private var pendingKillSwitchRestore = false
 
-    private static let tunnelBundleID = "com.pulsingroutes.vpn.tunnel"
-    private static let tunnelDescription = "Pulse Route VPN"
-    private static let serverAddress = "PulseRoute"
+    private static let tunnelBundleID = "com.simnetiq.vpnreact.tunnel"
+    private static let tunnelDescription = "Doppler VPN"
+    private static let serverAddress = "Doppler"
 
     // MARK: - Lifecycle
 
@@ -34,27 +38,90 @@ final class VPNManager {
     // MARK: - Public Methods
 
     func connect(xrayJSON: String) async throws {
+        guard !isPerformingAction else {
+            NSLog("[VPNManager] connect() blocked — action already in progress")
+            return
+        }
+        // Lock stays held until status transitions (released in updateStatus)
+        isPerformingAction = true
+
         errorMessage = nil
 
         // Also save to App Group as backup
         ConfigStore.saveXrayConfig(xrayJSON)
 
-        // Pass config directly via providerConfiguration — no App Group dependency
-        if manager == nil {
-            try await installManager(xrayJSON: xrayJSON)
-        } else {
-            try await updateManagerConfig(xrayJSON: xrayJSON)
-        }
+        do {
+            // Pass config directly via providerConfiguration — no App Group dependency
+            if manager == nil {
+                try await installManager(xrayJSON: xrayJSON)
+            } else {
+                try await updateManagerConfig(xrayJSON: xrayJSON)
+            }
 
-        guard let manager else {
-            throw VPNError.managerNotAvailable
-        }
+            guard let manager else {
+                isPerformingAction = false
+                throw VPNError.managerNotAvailable
+            }
 
-        try manager.connection.startVPNTunnel()
+            try manager.connection.startVPNTunnel()
+            // isPerformingAction is released in updateStatus when status reaches
+            // .connected, .disconnected, or .failed
+        } catch {
+            isPerformingAction = false
+            throw error
+        }
     }
 
-    func disconnect() {
-        manager?.connection.stopVPNTunnel()
+    func disconnect() async {
+        guard !isPerformingAction else {
+            NSLog("[VPNManager] disconnect() blocked — action already in progress")
+            // If already disconnecting, wait for it to complete
+            if status == .disconnecting {
+                await waitForDisconnect()
+            }
+            return
+        }
+        // Lock stays held until status transitions (released in updateStatus)
+        isPerformingAction = true
+
+        guard let manager else {
+            isPerformingAction = false
+            return
+        }
+
+        // If Kill Switch (on-demand) is active, disable it first so the system
+        // doesn't immediately reconnect after we stop the tunnel.
+        let wasOnDemandEnabled = manager.isOnDemandEnabled
+        if wasOnDemandEnabled {
+            manager.isOnDemandEnabled = false
+            do {
+                try await manager.saveToPreferences()
+                try await manager.loadFromPreferences()
+            } catch {
+                NSLog("[VPNManager] Failed to disable on-demand before disconnect: \(error)")
+            }
+        }
+
+        // Track that we need to restore kill switch after disconnect completes
+        if wasOnDemandEnabled && UserDefaults.standard.bool(forKey: "killSwitch") {
+            pendingKillSwitchRestore = true
+        }
+
+        manager.connection.stopVPNTunnel()
+
+        // Wait for status to actually reach .disconnected so callers
+        // (like reconnectIfNeeded) can safely call connect() after this returns
+        await waitForDisconnect()
+    }
+
+    /// Waits until VPN status reaches a non-active state (disconnected/failed).
+    /// Times out after 5 seconds to avoid deadlock.
+    private func waitForDisconnect() async {
+        let start = Date()
+        while status == .connected || status == .connecting || status == .disconnecting {
+            try? await Task.sleep(for: .milliseconds(100))
+            if Date().timeIntervalSince(start) > 5 { break }
+        }
     }
 
     func setKillSwitch(enabled: Bool) async {
@@ -77,7 +144,7 @@ final class VPNManager {
             try await manager.saveToPreferences()
             try await manager.loadFromPreferences()
         } catch {
-            errorMessage = "Failed to update kill switch: \(error.localizedDescription)"
+            errorMessage = "Failed to update always-on VPN: \(error.localizedDescription)"
         }
     }
 
@@ -169,17 +236,34 @@ final class VPNManager {
         case .connected:
             status = .connected
             errorMessage = nil
+            isPerformingAction = false
         case .connecting, .reasserting:
             status = .connecting
         case .disconnecting:
             status = .disconnecting
         case .disconnected:
             status = .disconnected
+            isPerformingAction = false
+            restoreKillSwitchIfNeeded()
         case .invalid:
             status = .failed
             errorMessage = "VPN configuration is invalid."
+            isPerformingAction = false
         @unknown default:
             status = .disconnected
+            isPerformingAction = false
+        }
+    }
+
+    /// Re-enables on-demand rules after a user-initiated disconnect.
+    /// This ensures Kill Switch is ready for the next connection without
+    /// auto-reconnecting immediately after the user pressed disconnect.
+    private func restoreKillSwitchIfNeeded() {
+        guard pendingKillSwitchRestore else { return }
+        pendingKillSwitchRestore = false
+
+        Task {
+            await setKillSwitch(enabled: true)
         }
     }
 }
