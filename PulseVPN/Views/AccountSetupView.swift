@@ -1,14 +1,6 @@
 import SwiftUI
 import RevenueCat
 
-// MARK: - Account Mode
-
-enum AccountMode: Equatable {
-    case choice
-    case create
-    case login
-}
-
 // MARK: - Account Setup View
 
 struct AccountSetupView: View {
@@ -18,11 +10,11 @@ struct AccountSetupView: View {
 
     // MARK: - State
 
-    @State private var mode: AccountMode = .choice
+    @State private var showCreateSheet = false
+    @State private var showLoginSheet = false
     @State private var generatedAccountId: String?
     @State private var loginInput: String = ""
     @State private var copied = false
-    @State private var showShareSheet = false
 
     /// Detected owner account ID if this Apple ID has an existing subscription
     @State private var detectedOwnerAccountId: String?
@@ -40,22 +32,20 @@ struct AccountSetupView: View {
 
             ScrollView {
                 VStack(spacing: Design.Spacing.lg) {
-                    modeContent
+                    choiceContent
                 }
                 .padding(.horizontal, Design.Spacing.lg)
                 .padding(.top, Design.Spacing.lg)
                 .padding(.bottom, Design.Spacing.xxl)
             }
         }
-        .animation(Design.Animation.springDefault, value: mode)
-        .animation(Design.Animation.springDefault, value: generatedAccountId)
         .animation(Design.Animation.springDefault, value: detectedOwnerAccountId)
         .onAppear {
             // If redirected from a subscription ownership conflict,
-            // pre-fill the original account ID and jump to login mode.
+            // pre-fill the original account ID and jump to login sheet.
             if let prefill = accountManager.consumePrefillAccountId() {
                 loginInput = prefill
-                mode = .login
+                showLoginSheet = true
             }
 
             // Re-check for existing subscription every time this view appears
@@ -64,6 +54,12 @@ struct AccountSetupView: View {
             Task {
                 await checkExistingSubscription()
             }
+        }
+        .sheet(isPresented: $showCreateSheet) {
+            createSheetContent
+        }
+        .sheet(isPresented: $showLoginSheet) {
+            loginSheetContent
         }
     }
 
@@ -88,33 +84,7 @@ struct AccountSetupView: View {
         }
     }
 
-    // MARK: - Mode Router
-
-    @ViewBuilder
-    private var modeContent: some View {
-        switch mode {
-        case .choice:
-            choiceContent
-                .transition(.asymmetric(
-                    insertion: .move(edge: .leading).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-        case .create:
-            createContent
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .trailing).combined(with: .opacity)
-                ))
-        case .login:
-            loginContent
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .trailing).combined(with: .opacity)
-                ))
-        }
-    }
-
-    // MARK: - Choice Mode
+    // MARK: - Choice Content (Always Visible)
 
     @ViewBuilder
     private var choiceContent: some View {
@@ -162,9 +132,9 @@ struct AccountSetupView: View {
                 title: "Create Account",
                 description: "Get a unique ID to use across all your devices"
             ) {
-                withAnimation(Design.Animation.springDefault) {
-                    mode = .create
-                }
+                accountManager.errorMessage = nil
+                generatedAccountId = nil
+                showCreateSheet = true
             }
 
             choiceCard(
@@ -173,9 +143,9 @@ struct AccountSetupView: View {
                 title: "Login",
                 description: "Enter your existing account ID to continue"
             ) {
-                withAnimation(Design.Animation.springDefault) {
-                    mode = .login
-                }
+                accountManager.errorMessage = nil
+                loginInput = ""
+                showLoginSheet = true
             }
         }
     }
@@ -209,11 +179,7 @@ struct AccountSetupView: View {
                     .foregroundStyle(Design.Colors.textTertiary)
             }
             .padding(Design.Spacing.md)
-            .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                    .strokeBorder(Design.Colors.separator.opacity(0.3), lineWidth: 1)
-            )
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.CornerRadius.lg))
         }
         .buttonStyle(ScalePressStyle())
         .accessibilityLabel(title)
@@ -233,22 +199,42 @@ struct AccountSetupView: View {
         }
         .padding(.horizontal, Design.Spacing.md)
         .padding(.vertical, Design.Spacing.sm + 2)
-        .background(Design.Colors.surfaceCard, in: Capsule())
-        .overlay(
-            Capsule()
-                .strokeBorder(Design.Colors.separator.opacity(0.2), lineWidth: 1)
-        )
+        .glassEffect(.regular, in: .capsule)
     }
 
-    // MARK: - Create Mode
+    // MARK: - Create Account Sheet
 
     @ViewBuilder
-    private var createContent: some View {
-        if generatedAccountId != nil {
-            createResultContent
-        } else {
-            createPromptContent
+    private var createSheetContent: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: Design.Spacing.lg) {
+                    if generatedAccountId != nil {
+                        createResultContent
+                    } else {
+                        createPromptContent
+                    }
+                }
+                .padding(.horizontal, Design.Spacing.lg)
+                .padding(.top, Design.Spacing.lg)
+                .padding(.bottom, Design.Spacing.xxl)
+            }
+            .navigationTitle("Create Account")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showCreateSheet = false
+                    }
+                }
+            }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.clear)
+        .animation(Design.Animation.springDefault, value: generatedAccountId)
     }
 
     @ViewBuilder
@@ -256,7 +242,7 @@ struct AccountSetupView: View {
         VStack(spacing: Design.Spacing.lg) {
             createPromptHeader
             previewCard
-            createPromptActions
+            generateButton
 
             if let error = accountManager.errorMessage {
                 errorBanner(error)
@@ -267,8 +253,8 @@ struct AccountSetupView: View {
     @ViewBuilder
     private var createPromptHeader: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.sm) {
-            Text("Create Account")
-                .font(.system(.title2, design: .rounded, weight: .bold))
+            Text("Generate Your ID")
+                .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(Design.Colors.textPrimary)
 
             Text("We'll generate a unique ID for you. Save it to use on other devices.")
@@ -286,19 +272,7 @@ struct AccountSetupView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Design.Spacing.lg)
             .padding(.horizontal, Design.Spacing.md)
-            .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                    .strokeBorder(Design.Colors.separator.opacity(0.3), lineWidth: 1)
-            )
-    }
-
-    @ViewBuilder
-    private var createPromptActions: some View {
-        VStack(spacing: Design.Spacing.md) {
-            generateButton
-            backButton
-        }
+            .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
     }
 
     @ViewBuilder
@@ -341,7 +315,7 @@ struct AccountSetupView: View {
         #endif
     }
 
-    // MARK: - Create Result
+    // MARK: - Create Result (inside create sheet)
 
     @ViewBuilder
     private var createResultContent: some View {
@@ -362,7 +336,7 @@ struct AccountSetupView: View {
     private var createResultHeader: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.sm) {
             Text("Your Account ID")
-                .font(.system(.title2, design: .rounded, weight: .bold))
+                .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(Design.Colors.textPrimary)
 
             Text("Save this ID! You'll need it to access your account on other devices.")
@@ -380,11 +354,7 @@ struct AccountSetupView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Design.Spacing.xl)
             .padding(.horizontal, Design.Spacing.md)
-            .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                    .strokeBorder(Design.Colors.separator.opacity(0.3), lineWidth: 1)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
             .accessibilityLabel("Account ID: \(generatedAccountId ?? "")")
     }
 
@@ -414,10 +384,7 @@ struct AccountSetupView: View {
             .foregroundStyle(copied ? .green : Design.Colors.teal)
             .frame(maxWidth: .infinity)
             .padding(.vertical, Design.Spacing.sm + 4)
-            .background(
-                copied ? Color.green.opacity(0.12) : Design.Colors.surfaceCardHover,
-                in: RoundedRectangle(cornerRadius: Design.CornerRadius.md)
-            )
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.CornerRadius.md))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(copied ? "Copied to clipboard" : "Copy account ID")
@@ -442,7 +409,7 @@ struct AccountSetupView: View {
                 .foregroundStyle(Design.Colors.teal)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Design.Spacing.sm + 4)
-                .background(Design.Colors.surfaceCardHover, in: RoundedRectangle(cornerRadius: Design.CornerRadius.md))
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: Design.CornerRadius.md))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Share account ID")
@@ -471,6 +438,7 @@ struct AccountSetupView: View {
     @ViewBuilder
     private var continueButton: some View {
         Button {
+            showCreateSheet = false
             accountManager.isOnboardingComplete = true
         } label: {
             Text("Continue")
@@ -492,26 +460,48 @@ struct AccountSetupView: View {
         .accessibilityLabel("Continue to app")
     }
 
-    // MARK: - Login Mode
+    // MARK: - Login Sheet
 
     @ViewBuilder
-    private var loginContent: some View {
-        VStack(spacing: Design.Spacing.lg) {
-            loginHeader
-            loginInputCard
-            loginActions
+    private var loginSheetContent: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: Design.Spacing.lg) {
+                    loginHeader
+                    loginInputCard
+                    loginButton
 
-            if let error = accountManager.errorMessage {
-                errorBanner(error)
+                    if let error = accountManager.errorMessage {
+                        errorBanner(error)
+                    }
+                }
+                .padding(.horizontal, Design.Spacing.lg)
+                .padding(.top, Design.Spacing.lg)
+                .padding(.bottom, Design.Spacing.xxl)
+            }
+            .navigationTitle("Login")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showLoginSheet = false
+                    }
+                }
             }
         }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(.clear)
+        .animation(Design.Animation.springQuick, value: isLoginValid)
     }
 
     @ViewBuilder
     private var loginHeader: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.sm) {
             Text("Welcome Back")
-                .font(.system(.title2, design: .rounded, weight: .bold))
+                .font(.system(.title3, design: .rounded, weight: .bold))
                 .foregroundStyle(Design.Colors.textPrimary)
 
             Text("Enter your Account ID to continue")
@@ -561,25 +551,7 @@ struct AccountSetupView: View {
             }
         }
         .padding(Design.Spacing.md)
-        .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                .strokeBorder(
-                    isLoginValid
-                        ? Design.Colors.teal.opacity(0.4)
-                        : Design.Colors.separator.opacity(0.3),
-                    lineWidth: 1
-                )
-        )
-        .animation(Design.Animation.springQuick, value: isLoginValid)
-    }
-
-    @ViewBuilder
-    private var loginActions: some View {
-        VStack(spacing: Design.Spacing.md) {
-            loginButton
-            backButton
-        }
+        .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
     }
 
     @ViewBuilder
@@ -620,24 +592,6 @@ struct AccountSetupView: View {
     }
 
     // MARK: - Shared Components
-
-    @ViewBuilder
-    private var backButton: some View {
-        Button {
-            withAnimation(Design.Animation.springDefault) {
-                accountManager.errorMessage = nil
-                mode = .choice
-                generatedAccountId = nil
-                loginInput = ""
-            }
-        } label: {
-            Text("Back")
-                .font(.system(.body, design: .rounded, weight: .medium))
-                .foregroundStyle(Design.Colors.textSecondary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Go back")
-    }
 
     @ViewBuilder
     private func iconBadge(icon: String, color: Color) -> some View {
@@ -751,7 +705,7 @@ struct AccountSetupView: View {
             let originalTransactionId = "\(productId)_\(dateString)"
 
             // Ask Supabase who owns this transaction
-            // We pass a dummy account ID — verify_restore will tell us the owner
+            // We pass a dummy account ID -- verify_restore will tell us the owner
             let verification = await syncService.verifyRestore(
                 accountId: "CHECK_ONLY",
                 originalTransactionId: originalTransactionId
@@ -763,7 +717,7 @@ struct AccountSetupView: View {
                     detectedOwnerAccountId = owner
                 }
             case .allowed, .error:
-                // No existing owner, or check failed — proceed normally
+                // No existing owner, or check failed -- proceed normally
                 break
             }
         } catch {
@@ -803,12 +757,10 @@ struct AccountSetupView: View {
                 .padding(.vertical, Design.Spacing.md)
                 .background(Design.Colors.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: Design.CornerRadius.md))
 
-            // Login CTA
+            // Login CTA — log in directly, skip the login sheet
             Button {
-                withAnimation(Design.Animation.springDefault) {
-                    loginInput = ownerId
-                    mode = .login
-                }
+                loginInput = ownerId
+                handleLogin()
             } label: {
                 HStack(spacing: Design.Spacing.sm) {
                     Image(systemName: "arrow.right.circle.fill")
@@ -832,11 +784,7 @@ struct AccountSetupView: View {
             .buttonStyle(ScalePressStyle())
         }
         .padding(Design.Spacing.md)
-        .background(Design.Colors.surfaceCard, in: RoundedRectangle(cornerRadius: Design.CornerRadius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: Design.CornerRadius.lg)
-                .strokeBorder(Design.Colors.teal.opacity(0.3), lineWidth: 1)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: Design.CornerRadius.lg))
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 }

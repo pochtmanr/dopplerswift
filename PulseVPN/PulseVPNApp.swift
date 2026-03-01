@@ -110,25 +110,9 @@ struct RootView: View {
             Design.Colors.surfaceBackground
                 .ignoresSafeArea()
 
-            VStack(spacing: Design.Spacing.md) {
-                Image("AppLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 80, height: 80)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.teal, Color.teal.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .clipShape(.rect(cornerRadius: 18, style: .continuous))
-                    .shadow(color: Color.teal.opacity(0.3), radius: 12, y: 6)
-
-                ProgressView()
-                    .controlSize(.regular)
-                    .tint(.secondary)
-            }
+            ProgressView()
+                .controlSize(.regular)
+                .tint(.secondary)
         }
     }
 

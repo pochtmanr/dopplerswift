@@ -147,6 +147,7 @@ struct ContentView: View {
                 }
             }
         }
+        .id(selectedTab)
         .sheet(isPresented: $showServerList) {
             serverListSheet
         }

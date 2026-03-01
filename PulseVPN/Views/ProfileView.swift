@@ -139,6 +139,30 @@ struct ProfileView: View {
                                 .background(.red.opacity(0.12), in: Capsule())
                         }
                         .buttonStyle(ScaleButtonStyle())
+                        .confirmationDialog(
+                            "Delete Account",
+                            isPresented: $showDeleteConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Delete Account", role: .destructive) {
+                                showDeleteFinalConfirmation = true
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+                        }
+                        .confirmationDialog(
+                            "Are you sure?",
+                            isPresented: $showDeleteFinalConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Yes, Delete Everything", role: .destructive) {
+                                Task { await performDeleteAccount() }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This is your last chance. Your account, servers, and subscription data will be permanently removed.")
+                        }
 
                         Button {
                             showLogoutConfirmation = true
@@ -151,6 +175,18 @@ struct ProfileView: View {
                                 .background(.red, in: Capsule())
                         }
                         .buttonStyle(ScaleButtonStyle())
+                        .confirmationDialog(
+                            "Log Out",
+                            isPresented: $showLogoutConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Log Out", role: .destructive) {
+                                accountManager.logout()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("You will need your Account ID to sign back in.")
+                        }
                     }
                     .padding(.top, Design.Spacing.sm)
 
@@ -167,30 +203,6 @@ struct ProfileView: View {
                 .padding(.vertical, Design.Spacing.md)
             }
         }
-        .confirmationDialog(
-            "Delete Account",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Account", role: .destructive) {
-                showDeleteFinalConfirmation = true
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will permanently delete your account and all associated data. This action cannot be undone.")
-        }
-        .confirmationDialog(
-            "Are you sure?",
-            isPresented: $showDeleteFinalConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Yes, Delete Everything", role: .destructive) {
-                Task { await performDeleteAccount() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This is your last chance. Your account, servers, and subscription data will be permanently removed.")
-        }
         .alert("Cannot Delete Account", isPresented: $showDeleteError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -204,18 +216,6 @@ struct ProfileView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        .confirmationDialog(
-            "Log Out",
-            isPresented: $showLogoutConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Log Out", role: .destructive) {
-                accountManager.logout()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You will need your Account ID to sign back in.")
-        }
     }
 
     // MARK: - Copy Button

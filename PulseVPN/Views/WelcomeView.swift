@@ -9,9 +9,6 @@ struct WelcomeView: View {
 
     @State private var currentPhraseIndex = 0
     @State private var timer: Timer?
-    @State private var iconScale: CGFloat = 0.5
-    @State private var iconOpacity: Double = 0
-    @State private var contentOpacity: Double = 0
 
     // MARK: - Constants
 
@@ -41,126 +38,67 @@ struct WelcomeView: View {
 
     var body: some View {
         ZStack {
-            backgroundImage
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                heroSection
-
-                Spacer()
-
-                bottomSection
-            }
-            .padding(.horizontal, Design.Spacing.lg)
-        }
-        .onAppear {
-            startPhraseTimer()
-            startEntranceAnimation()
-        }
-        .onDisappear {
-            timer?.invalidate()
-            timer = nil
-        }
-    }
-
-    // MARK: - Background
-
-    @ViewBuilder
-    private var backgroundImage: some View {
-        GeometryReader { geo in
-            ZStack {
-                Design.Colors.surfaceBackground
-                    .ignoresSafeArea()
-
+            // Background image
+            GeometryReader { geo in
                 Image("WelcomeBackground")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: geo.size.width, height: geo.size.height)
                     .clipped()
-                    .opacity(0.45)
-
-                // Bottom gradient for text readability
-                VStack(spacing: 0) {
-                    Spacer()
-
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Design.Colors.surfaceBackground
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: geo.size.height * 0.45)
-                }
             }
+            .ignoresSafeArea()
+
+            // Content overlay
+            VStack(spacing: Design.Spacing.lg) {
+                Spacer()
+                    .frame(maxHeight: 120)
+
+                // Logo
+                Image("AppLogo")
+                    .renderingMode(.original)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                // Animated text
+                VStack(spacing: Design.Spacing.sm) {
+                    Text("Everyone has a right")
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    Text(phrases[currentPhraseIndex])
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .id(currentPhraseIndex)
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            )
+                        )
+                }
+
+                Spacer()
+
+                // CTA + legal at the bottom
+                VStack(spacing: Design.Spacing.md) {
+                    getStartedButton
+                    legalFooter
+                }
+                .padding(.bottom, Design.Spacing.xl)
+            }
+            .padding(.horizontal, Design.Spacing.xl)
         }
-        .ignoresSafeArea()
-    }
-
-    // MARK: - Hero Section
-
-    @ViewBuilder
-    private var heroSection: some View {
-        VStack(spacing: Design.Spacing.lg) {
-            appLogo
-            titleGroup
+        .onAppear {
+            startPhraseTimer()
         }
-        .opacity(contentOpacity)
-    }
-
-    @ViewBuilder
-    private var appLogo: some View {
-        Image("AppLogo")
-            .renderingMode(.original)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 100, height: 100)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .scaleEffect(iconScale)
-            .opacity(iconOpacity)
-            .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private var titleGroup: some View {
-        VStack(spacing: Design.Spacing.sm) {
-            Text("Everyone has a right")
-                .font(.system(.title, design: .rounded, weight: .bold))
-                .foregroundStyle(Design.Colors.textPrimary)
-                .multilineTextAlignment(.center)
-
-            animatedPhrase
+        .onDisappear {
+            timer?.invalidate()
+            timer = nil
         }
-    }
-
-    @ViewBuilder
-    private var animatedPhrase: some View {
-        Text(phrases[currentPhraseIndex])
-            .font(.system(.title, design: .rounded, weight: .bold))
-            .foregroundStyle(Design.Colors.textPrimary)
-            .multilineTextAlignment(.center)
-            .id(currentPhraseIndex)
-            .transition(
-                .asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .top).combined(with: .opacity)
-                )
-            )
-            .accessibilityLabel(Text("Everyone has a right") + Text(" ") + Text(phrases[currentPhraseIndex]))
-    }
-
-    // MARK: - Bottom Section
-
-    @ViewBuilder
-    private var bottomSection: some View {
-        VStack(spacing: Design.Spacing.md) {
-            getStartedButton
-            legalFooter
-        }
-        .padding(.bottom, Design.Spacing.xl)
-        .opacity(contentOpacity)
     }
 
     @ViewBuilder
@@ -172,31 +110,21 @@ struct WelcomeView: View {
                 .font(.system(.body, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, Design.Spacing.md)
-                .background(
-                    LinearGradient(
-                        colors: [Design.Colors.teal, Design.Colors.teal.opacity(0.7)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: Capsule()
-                )
-                .shadow(color: Design.Colors.teal.opacity(0.3), radius: 12, y: 6)
+                .padding(.vertical, 16)
+                .background(Design.Colors.teal, in: Capsule())
+                .glassEffect(.regular.interactive(), in: .capsule)
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel("Get Started")
         .accessibilityHint("Begin setting up your VPN account")
-        #if os(iOS)
-        .sensoryFeedback(.impact(weight: .medium), trigger: currentPhraseIndex)
-        #endif
     }
 
     @ViewBuilder
     private var legalFooter: some View {
         Text("By continuing, you agree to our [Terms](https://www.dopplervpn.org/en/terms) and [Privacy](https://www.dopplervpn.org/en/privacy)")
             .font(.system(.caption, design: .rounded))
-            .foregroundStyle(Design.Colors.textTertiary)
-            .tint(Design.Colors.teal)
+            .foregroundStyle(.white.opacity(0.6))
+            .tint(.white.opacity(0.8))
             .multilineTextAlignment(.center)
             .padding(.horizontal, Design.Spacing.md)
     }
@@ -211,15 +139,6 @@ struct WelcomeView: View {
         }
     }
 
-    private func startEntranceAnimation() {
-        withAnimation(Design.Animation.springDefault.delay(0.1)) {
-            iconScale = 1.0
-            iconOpacity = 1.0
-        }
-        withAnimation(Design.Animation.springDefault.delay(0.3)) {
-            contentOpacity = 1.0
-        }
-    }
 }
 
 // MARK: - Scale Button Style
